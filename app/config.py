@@ -14,8 +14,14 @@ class Settings(BaseSettings):
     real_api_key: str | None = None
     real_base_url: str = "https://api.vsellm.ru/v1"
     real_model: str = "google/gemini-2.5-flash"
+    real_timeout_seconds: float = 90.0
+    real_max_retries: int = 3
     gemini_api_key: str | None = None
     gemini_model: str | None = None
+    log_file: Path = Path("app/storage/simab.log")
+    log_level: str = "INFO"
+    log_max_bytes: int = 2_000_000
+    log_backup_count: int = 3
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="SAB_")
 

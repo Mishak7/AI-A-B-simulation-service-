@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import json
 import logging
@@ -31,14 +32,28 @@ class RealLLMClient(LLMClient):
             raise ValueError("SAB_REAL_API_KEY is required when SAB_LLM_PROVIDER=real")
 
         try:
-            from openai import AsyncOpenAI
+            from openai import APIConnectionError, APITimeoutError, AsyncOpenAI, RateLimitError
         except ImportError as exc:
             raise ImportError("Install openai to use RealLLMClient: pip install openai") from exc
 
-        self.client = AsyncOpenAI(api_key=api_key, base_url=settings.real_base_url)
+        self.client = AsyncOpenAI(
+            api_key=api_key,
+            base_url=settings.real_base_url,
+            timeout=settings.real_timeout_seconds,
+            max_retries=0,
+        )
         self.model = model
         self.base_url = settings.real_base_url
-        logger.info("Initialized RealLLMClient base_url=%s model=%s", self.base_url, self.model)
+        self.timeout_seconds = settings.real_timeout_seconds
+        self.max_retries = settings.real_max_retries
+        self.retryable_errors = (APITimeoutError, APIConnectionError, RateLimitError)
+        logger.info(
+            "Initialized RealLLMClient base_url=%s model=%s timeout_seconds=%s max_retries=%s",
+            self.base_url,
+            self.model,
+            self.timeout_seconds,
+            self.max_retries,
+        )
 
     async def generate_personas(self, prompt: str, num_personas: int) -> list[PersonaProfile]:
         logger.info("Calling real LLM for persona generation num_personas=%s", num_personas)
@@ -113,21 +128,51 @@ class RealLLMClient(LLMClient):
         return await self._chat_content(prompt)
 
     async def _chat_content(self, content: str | list[dict[str, Any]]) -> str:
-        logger.debug("Sending chat.completions request model=%s base_url=%s", self.model, self.base_url)
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "user",
-                    "content": content,
-                }
-            ],
-            temperature=0.2,
-        )
-        message = response.choices[0].message.content
-        if not message:
-            raise ValueError("LLM returned an empty response")
-        return message
+        for attempt in range(1, self.max_retries + 2):
+            try:
+                logger.debug(
+                    "Sending chat.completions request model=%s base_url=%s attempt=%s",
+                    self.model,
+                    self.base_url,
+                    attempt,
+                )
+                response = await self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": content,
+                        }
+                    ],
+                    temperature=0.2,
+                )
+                message = response.choices[0].message.content
+                if not message:
+                    raise ValueError("LLM returned an empty response")
+                return message
+            except self.retryable_errors as exc:
+                if attempt > self.max_retries:
+                    logger.exception(
+                        "LLM request failed after retries model=%s base_url=%s attempts=%s error=%s",
+                        self.model,
+                        self.base_url,
+                        attempt,
+                        exc.__class__.__name__,
+                    )
+                    raise
+                delay = min(2 ** (attempt - 1), 8)
+                logger.warning(
+                    "LLM request failed model=%s base_url=%s attempt=%s/%s error=%s; retrying in %ss",
+                    self.model,
+                    self.base_url,
+                    attempt,
+                    self.max_retries + 1,
+                    exc.__class__.__name__,
+                    delay,
+                )
+                await asyncio.sleep(delay)
+
+        raise RuntimeError("LLM request retry loop exited unexpectedly")
 
     @staticmethod
     def _image_content_part(image_path: str) -> dict[str, Any]:

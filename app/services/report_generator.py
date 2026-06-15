@@ -1,4 +1,5 @@
 import json
+import logging
 from collections import defaultdict
 from typing import Any
 
@@ -7,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.llm.base import LLMClient
 from app.models import Experiment, ExperimentReport, MappedVerdict, PresentedOrder, SimulationResult, VisualQuality
 from app.services.prompt_renderer import PromptRenderer
+
+logger = logging.getLogger(__name__)
 
 
 class ReportGenerator:
@@ -32,6 +35,14 @@ class ReportGenerator:
         top_challenger = self._top_reasons(grouped[MappedVerdict.challenger])
         top_none = self._top_reasons(grouped[MappedVerdict.none])
         visual_stats = self._visual_stats(results)
+        logger.info(
+            "Report generation started experiment_id=%s results=%s stable=%s unstable=%s winner=%s",
+            experiment.id,
+            len(results),
+            aggregation["stable_personas"],
+            aggregation["unstable_personas"],
+            aggregation["winner"],
+        )
 
         context = {
             "control_votes": aggregation["control_votes"],
@@ -90,6 +101,12 @@ class ReportGenerator:
         )
         report = await session.merge(report)
         await session.flush()
+        logger.info(
+            "Report generation finished experiment_id=%s recommendations=%s limitations_chars=%s",
+            experiment.id,
+            len(summary.get("recommendations", [])),
+            len(report.limitations or ""),
+        )
         return report
 
     @staticmethod

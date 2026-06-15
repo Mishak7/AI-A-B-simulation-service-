@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 import logging
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -9,6 +9,7 @@ from app.api.experiments import router as experiments_router
 from app.config import get_settings
 from app.db.base import Base
 from app.db.session import engine
+from app.services.logging_config import configure_logging
 
 from app import models as _models  # noqa: F401
 
@@ -18,6 +19,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
+    configure_logging(settings)
     logger.info(
         "Starting %s llm_provider=%s database_url=%s storage_dir=%s",
         settings.app_name,
@@ -35,6 +37,19 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title=get_settings().app_name, lifespan=lifespan)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 app.include_router(experiments_router)
+
+
+@app.get("/logs")
+async def read_logs(limit: int = Query(default=180, ge=1, le=1000)) -> dict[str, object]:
+    log_file = get_settings().log_file
+    if not log_file.exists():
+        return {"path": str(log_file), "lines": []}
+    with log_file.open("r", encoding="utf-8", errors="replace") as file:
+        lines = file.readlines()
+    return {
+        "path": str(log_file),
+        "lines": [line.rstrip("\n") for line in lines[-limit:]],
+    }
 
 
 async def _run_sqlite_migrations(connection) -> None:
@@ -345,6 +360,41 @@ async def index() -> str:
     .pill.none { color: #7a5a00; background: #fff6d7; }
     .pill.bad { color: #981b12; background: #fee4e2; }
     .error { color: var(--red); font-weight: 600; }
+    .logs-panel {
+      margin-top: 18px;
+      padding: 18px;
+      display: grid;
+      gap: 12px;
+    }
+    .logs-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+    }
+    .logs-head button {
+      min-width: 0;
+      min-height: 36px;
+      padding: 8px 12px;
+      font-size: 13px;
+      font-weight: 560;
+      background: #eef7f2;
+      color: var(--green-dark);
+      border: 1px solid #b7dfc9;
+    }
+    .logs-head button:hover { background: #dff2e8; }
+    .log-output {
+      margin: 0;
+      max-height: 320px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #0f1713;
+      color: #d7f4df;
+      padding: 12px;
+      font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      white-space: pre-wrap;
+    }
     @media (max-width: 980px) {
       .layout, .viz, .split { grid-template-columns: 1fr; }
       .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -435,17 +485,30 @@ async def index() -> str:
         </div>
       </section>
     </div>
+
+    <section class="logs-panel">
+      <div class="logs-head">
+        <div>
+          <h2>Журнал событий</h2>
+          <p>Последние серверные события: генерация персон, решения и сборка отчета.</p>
+        </div>
+        <button id="refreshLogs" type="button">Обновить</button>
+      </div>
+      <pre id="logs" class="log-output">Лог пока пуст.</pre>
+    </section>
   </main>
   <script>
     const reportNode = document.getElementById("report");
     const statusNode = document.getElementById("status");
     const winnerNode = document.getElementById("winner");
     const subtitleNode = document.getElementById("subtitle");
+    const logsNode = document.getElementById("logs");
     let defaultControlFile = null;
     let defaultChallengerFile = null;
     let selectedControlFile = null;
     let selectedChallengerFile = null;
     let defaultFilesPromise = null;
+    let logPoller = null;
 
     const labels = {
       control: "Базовый вариант",
@@ -518,6 +581,30 @@ async def index() -> str:
     function renderList(items, emptyText) {
       if (!items || items.length === 0) return `<p>${emptyText}</p>`;
       return `<ul>${items.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
+    }
+
+    async function refreshLogs() {
+      try {
+        const payload = await fetch("/logs?limit=180").then(parseResponse);
+        logsNode.textContent = payload.lines && payload.lines.length
+          ? payload.lines.join("\\n")
+          : "Лог пока пуст.";
+      } catch (error) {
+        logsNode.textContent = `Не удалось загрузить журнал: ${error.message || String(error)}`;
+      }
+    }
+
+    function startLogPolling() {
+      refreshLogs();
+      if (logPoller) clearInterval(logPoller);
+      logPoller = setInterval(refreshLogs, 1800);
+    }
+
+    function stopLogPolling() {
+      if (!logPoller) return;
+      clearInterval(logPoller);
+      logPoller = null;
+      refreshLogs();
     }
 
     function renderReport(report) {
@@ -626,6 +713,7 @@ async def index() -> str:
 
     setupPreview("control", "controlDrop", "controlPreview", "controlName");
     setupPreview("challenger", "challengerDrop", "challengerPreview", "challengerName");
+    document.getElementById("refreshLogs").addEventListener("click", refreshLogs);
 
     defaultFilesPromise = Promise.all([
       loadDefaultFile("/static/sber_credits_without_gigachat.png", "sber_credits_without_gigachat.png"),
@@ -640,6 +728,7 @@ async def index() -> str:
     document.getElementById("run").addEventListener("click", async () => {
       const button = document.getElementById("run");
       button.disabled = true;
+      startLogPolling();
       winnerNode.textContent = "Расчет...";
       subtitleNode.textContent = "Создаем эксперимент и опрашиваем синтетические персоны.";
       reportNode.className = "empty";
@@ -689,9 +778,11 @@ async def index() -> str:
         reportNode.innerHTML = `<div class="empty-inner"><div class="empty-visual"></div><h2>Не удалось запустить симуляцию</h2><p class="error">${escapeHtml(error.message || String(error))}</p></div>`;
         setStatus(error.message || String(error), true);
       } finally {
+        stopLogPolling();
         button.disabled = false;
       }
     });
+    refreshLogs();
   </script>
 </body>
 </html>

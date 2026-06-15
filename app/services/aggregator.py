@@ -1,7 +1,10 @@
+import logging
 from collections import Counter, defaultdict
 
 from app.config import get_settings
 from app.models import MappedVerdict, PresentedOrder, RawVerdict, SimulationResult
+
+logger = logging.getLogger(__name__)
 
 
 class AggregationResult(dict):
@@ -56,6 +59,21 @@ class Aggregator:
             else:
                 confidence_label = "low"
 
+        logger.info(
+            "Aggregation result total_personas=%s stable=%s unstable=%s control=%s challenger=%s none=%s "
+            "winner=%s confidence_score=%s confidence_label=%s image_1_votes=%s image_2_votes=%s",
+            total_personas,
+            stable_personas,
+            unstable_personas,
+            control_votes,
+            challenger_votes,
+            none_votes,
+            winner,
+            confidence_score,
+            confidence_label,
+            image_1_votes,
+            image_2_votes,
+        )
         return AggregationResult(
             control_votes=control_votes,
             challenger_votes=challenger_votes,

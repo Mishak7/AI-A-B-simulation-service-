@@ -1,4 +1,5 @@
 import json
+import logging
 import shutil
 from datetime import UTC, datetime
 from pathlib import Path
@@ -26,6 +27,7 @@ from app.services.report_generator import ReportGenerator
 from app.services.simulation_runner import SimulationRunner
 
 router = APIRouter(prefix="/experiments", tags=["experiments"])
+logger = logging.getLogger(__name__)
 
 
 @router.post("", response_model=ExperimentRead)
@@ -41,6 +43,13 @@ async def create_experiment(
     session.add(experiment)
     await session.commit()
     await session.refresh(experiment)
+    logger.info(
+        "Experiment created id=%s name=%r goal_chars=%s audience_chars=%s",
+        experiment.id,
+        experiment.name,
+        len(experiment.conversion_goal or ""),
+        len(experiment.target_audience or ""),
+    )
     return experiment
 
 
@@ -64,6 +73,12 @@ async def upload_images(
     experiment.challenger_image_path = str(challenger_path)
     await session.commit()
     await session.refresh(experiment)
+    logger.info(
+        "Images uploaded experiment_id=%s control=%s challenger=%s",
+        experiment.id,
+        control_path,
+        challenger_path,
+    )
     return experiment
 
 
@@ -79,6 +94,12 @@ async def run_experiment(
     if not experiment.control_image_path or not experiment.challenger_image_path:
         raise HTTPException(status_code=400, detail="Both control and challenger images are required")
 
+    logger.info(
+        "Run requested experiment_id=%s num_personas=%s batch_size=%s",
+        experiment_id,
+        payload.num_personas,
+        payload.batch_size,
+    )
     experiment.status = ExperimentStatus.running
     await session.execute(delete(SimulationResult).where(SimulationResult.experiment_id == experiment_id))
     await session.execute(delete(ExperimentReport).where(ExperimentReport.experiment_id == experiment_id))
@@ -94,13 +115,25 @@ async def run_experiment(
             num_personas=payload.num_personas,
             batch_size=min(payload.batch_size, 10),
         )
+        logger.info("Personas ready experiment_id=%s count=%s", experiment_id, len(personas))
         results = await SimulationRunner(llm_client, prompt_renderer).run(
             session=session,
             experiment=experiment,
             personas=personas,
             concurrency=payload.batch_size,
         )
+        logger.info("Simulations ready experiment_id=%s result_count=%s", experiment_id, len(results))
         aggregation = Aggregator().aggregate(results)
+        logger.info(
+            "Aggregation ready experiment_id=%s winner=%s control=%s challenger=%s none=%s stable=%s unstable=%s",
+            experiment_id,
+            aggregation["winner"],
+            aggregation["control_votes"],
+            aggregation["challenger_votes"],
+            aggregation["none_votes"],
+            aggregation["stable_personas"],
+            aggregation["unstable_personas"],
+        )
         report = await ReportGenerator(llm_client, prompt_renderer).generate(
             session=session,
             experiment=experiment,
@@ -111,8 +144,10 @@ async def run_experiment(
         experiment.completed_at = datetime.now(UTC)
         await session.commit()
         await session.refresh(report)
+        logger.info("Run completed experiment_id=%s report_experiment_id=%s", experiment_id, report.experiment_id)
         return _report_to_schema(report, results)
     except Exception:
+        logger.exception("Run failed experiment_id=%s", experiment_id)
         experiment.status = ExperimentStatus.failed
         await session.commit()
         raise

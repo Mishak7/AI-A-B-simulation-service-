@@ -11,6 +11,7 @@ PNG_1X1 = (
 def test_mock_pipeline_end_to_end(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("SAB_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path / 'test.db'}")
     monkeypatch.setenv("SAB_STORAGE_DIR", str(tmp_path / "storage"))
+    monkeypatch.setenv("SAB_LOG_FILE", str(tmp_path / "simab.log"))
     monkeypatch.setenv("SAB_LLM_PROVIDER", "mock")
 
     main = importlib.import_module("app.main")
@@ -90,3 +91,9 @@ def test_mock_pipeline_end_to_end(tmp_path, monkeypatch) -> None:
         )
         assert rerun_payload["stable_personas"] + rerun_payload["unstable_personas"] == 3
         assert len(rerun_payload["agent_results"]) == 6
+
+        logs = client.get("/logs?limit=50")
+        assert logs.status_code == 200
+        log_lines = "\n".join(logs.json()["lines"])
+        assert "Run completed experiment_id=" in log_lines
+        assert "Generated persona experiment_id=" in log_lines

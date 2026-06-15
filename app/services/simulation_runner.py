@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +17,8 @@ from app.models import (
 )
 from app.services.prompt_renderer import PromptRenderer
 
+logger = logging.getLogger(__name__)
+
 
 class SimulationRunner:
     def __init__(self, llm_client: LLMClient, prompt_renderer: PromptRenderer) -> None:
@@ -30,15 +33,36 @@ class SimulationRunner:
         concurrency: int,
     ) -> list[SimulationResult]:
         semaphore = asyncio.Semaphore(concurrency)
+        logger.info(
+            "Simulation run started experiment_id=%s personas=%s concurrency=%s",
+            experiment.id,
+            len(personas),
+            concurrency,
+        )
         control_visual, challenger_visual = await asyncio.gather(
             self._assess_variant_visual_quality(experiment, "Control", experiment.control_image_path or ""),
             self._assess_variant_visual_quality(
                 experiment, "Challenger", experiment.challenger_image_path or ""
             ),
         )
+        logger.info(
+            "Visual QA experiment_id=%s control_quality=%s control_issues=%r challenger_quality=%s challenger_issues=%r",
+            experiment.id,
+            control_visual.visual_quality,
+            control_visual.visual_issues,
+            challenger_visual.visual_quality,
+            challenger_visual.visual_issues,
+        )
 
         async def simulate(persona: Persona, presented_order: PresentedOrder) -> dict[str, Any]:
             async with semaphore:
+                logger.info(
+                    "Simulating persona experiment_id=%s persona_id=%s name=%r order=%s",
+                    experiment.id,
+                    persona.id,
+                    persona.name,
+                    presented_order.value,
+                )
                 if presented_order == PresentedOrder.control_first:
                     image_1_label, image_2_label = "Control", "Challenger"
                     image_1_visual = control_visual
@@ -96,19 +120,36 @@ class SimulationRunner:
                     challenger_image_path=experiment.challenger_image_path or "",
                     context=context,
                 )
+                raw_verdict = RawVerdict(verdict.verdict)
+                mapped_verdict = self.map_verdict(raw_verdict, presented_order)
+                confidence = ConfidenceLevel(verdict.confidence)
+                critical_visual_defect = (
+                    image_1_visual.visual_quality == "fail" or image_2_visual.visual_quality == "fail"
+                )
+                logger.info(
+                    "Persona decision experiment_id=%s persona_id=%s name=%r order=%s raw=%s mapped=%s "
+                    "confidence=%s critical_visual_defect=%s rationale=%r",
+                    experiment.id,
+                    persona.id,
+                    persona.name,
+                    presented_order.value,
+                    raw_verdict.value,
+                    mapped_verdict.value,
+                    confidence.value,
+                    critical_visual_defect,
+                    verdict.rationale,
+                )
 
                 return {
                     "persona_id": persona.id,
                     "presented_order": presented_order,
-                    "raw_verdict": RawVerdict(verdict.verdict),
-                    "mapped_verdict": self.map_verdict(RawVerdict(verdict.verdict), presented_order),
-                    "confidence": ConfidenceLevel(verdict.confidence),
+                    "raw_verdict": raw_verdict,
+                    "mapped_verdict": mapped_verdict,
+                    "confidence": confidence,
                     "visual_quality_image_1": VisualQuality(image_1_visual.visual_quality),
                     "visual_quality_image_2": VisualQuality(image_2_visual.visual_quality),
                     "visual_issues": self._format_visual_issues(image_1_visual, image_2_visual),
-                    "critical_visual_defect": (
-                        image_1_visual.visual_quality == "fail" or image_2_visual.visual_quality == "fail"
-                    ),
+                    "critical_visual_defect": critical_visual_defect,
                     "rationale": verdict.rationale,
                 }
 
@@ -128,6 +169,7 @@ class SimulationRunner:
             session.add(result)
             results.append(result)
         await session.flush()
+        logger.info("Simulation run finished experiment_id=%s stored_results=%s", experiment.id, len(results))
         return results
 
     async def _assess_variant_visual_quality(self, experiment: Experiment, label: str, image_path: str):
