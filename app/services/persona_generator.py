@@ -2,6 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.llm.base import LLMClient
 from app.models import Experiment, Persona
+from app.schemas.persona import PersonaProfile
 from app.services.prompt_renderer import PromptRenderer
 
 
@@ -34,8 +35,7 @@ class PersonaGenerator:
                     "experiment_name": experiment.name,
                 },
             }
-            prompt = self.prompt_renderer.render("persona_generation.md", context)
-            profiles = await self.llm_client.generate_personas(prompt, current_batch_size)
+            profiles = await self._generate_batch(context, current_batch_size)
 
             for profile in profiles:
                 persona = Persona(experiment_id=experiment.id, **profile.model_dump())
@@ -46,3 +46,34 @@ class PersonaGenerator:
             await session.flush()
 
         return created
+
+    async def _generate_batch(
+        self,
+        context: dict,
+        target_count: int,
+        max_attempts: int = 3,
+    ) -> list[PersonaProfile]:
+        profiles: list[PersonaProfile] = []
+
+        for _ in range(max_attempts):
+            remaining = target_count - len(profiles)
+            if remaining <= 0:
+                break
+
+            retry_context = {
+                **context,
+                "num_personas": remaining,
+                "existing_personas": [
+                    *context["existing_personas"],
+                    *[
+                        {"name": profile.name, "occupation": profile.occupation}
+                        for profile in profiles
+                    ],
+                ],
+            }
+            prompt = self.prompt_renderer.render("persona_generation.md", retry_context)
+            profiles.extend(await self.llm_client.generate_personas(prompt, remaining))
+
+        if len(profiles) < target_count:
+            raise ValueError(f"Expected {target_count} personas, got {len(profiles)} after retries")
+        return profiles[:target_count]

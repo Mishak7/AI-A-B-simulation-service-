@@ -50,7 +50,11 @@ class RealLLMClient(LLMClient):
 
         personas = [PersonaProfile.model_validate(item) for item in personas_payload[:num_personas]]
         if len(personas) != num_personas:
-            raise ValueError(f"Expected {num_personas} personas, got {len(personas)}")
+            logger.info(
+                "Real LLM returned %s/%s personas; PersonaGenerator will request the missing profiles",
+                len(personas),
+                num_personas,
+            )
         return personas
 
     async def simulate_choice(

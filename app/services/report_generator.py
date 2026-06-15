@@ -78,18 +78,54 @@ class ReportGenerator:
     @staticmethod
     def _normalize_rationale(result: SimulationResult) -> str:
         if result.presented_order == PresentedOrder.control_first:
-            image_1_variant = "Control"
-            image_2_variant = "Challenger"
+            image_1_variant = {
+                "nom": "базовый вариант",
+                "gen": "базового варианта",
+                "loc": "базовом варианте",
+            }
+            image_2_variant = {
+                "nom": "тестовый вариант",
+                "gen": "тестового варианта",
+                "loc": "тестовом варианте",
+            }
         else:
-            image_1_variant = "Challenger"
-            image_2_variant = "Control"
+            image_1_variant = {
+                "nom": "тестовый вариант",
+                "gen": "тестового варианта",
+                "loc": "тестовом варианте",
+            }
+            image_2_variant = {
+                "nom": "базовый вариант",
+                "gen": "базового варианта",
+                "loc": "базовом варианте",
+            }
 
-        return (
-            result.rationale.replace("Image 1", image_1_variant)
-            .replace("image 1", image_1_variant)
-            .replace("Image 2", image_2_variant)
-            .replace("image 2", image_2_variant)
-        )
+        replacements = {
+            "Image 1": image_1_variant["nom"],
+            "image 1": image_1_variant["nom"],
+            "Image 2": image_2_variant["nom"],
+            "image 2": image_2_variant["nom"],
+            "Изображение 1": image_1_variant["nom"],
+            "изображение 1": image_1_variant["nom"],
+            "Изображение 2": image_2_variant["nom"],
+            "изображение 2": image_2_variant["nom"],
+            "Первый экран": image_1_variant["nom"],
+            "первый экран": image_1_variant["nom"],
+            "первом экране": image_1_variant["loc"],
+            "Первом экране": image_1_variant["loc"],
+            "первого экрана": image_1_variant["gen"],
+            "Первого экрана": image_1_variant["gen"],
+            "Второй экран": image_2_variant["nom"],
+            "второй экран": image_2_variant["nom"],
+            "втором экране": image_2_variant["loc"],
+            "Втором экране": image_2_variant["loc"],
+            "второго экрана": image_2_variant["gen"],
+            "Второго экрана": image_2_variant["gen"],
+        }
+        normalized = result.rationale
+        for source, target in replacements.items():
+            normalized = normalized.replace(source, target)
+        return normalized
 
     @staticmethod
     def _visual_stats(results: list[SimulationResult]) -> dict[str, float]:

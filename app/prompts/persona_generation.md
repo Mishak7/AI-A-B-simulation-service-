@@ -8,7 +8,7 @@ Conversion goal:
 Target audience:
 {{ target_audience or "General audience" }}
 
-Number of personas to generate:
+Number of personas to generate exactly:
 {{ num_personas }}
 
 Existing personas in this experiment batch:
@@ -46,8 +46,9 @@ Do not assume uniform behavior. Make sure each persona has a life, constraints,
 goals, and needs beyond this specific product category. Personas may reject ads,
 cookies, promotions, confusing claims, or aggressive flows if they feel fishy.
 
-Return strictly valid JSON with a top-level "personas" array. Do not include
-Markdown fences or explanatory text.
+Return strictly valid JSON with a top-level "personas" array containing exactly
+{{ num_personas }} persona objects. Do not include Markdown fences or
+explanatory text.
 
 Each persona object must include exactly these string fields:
 - name

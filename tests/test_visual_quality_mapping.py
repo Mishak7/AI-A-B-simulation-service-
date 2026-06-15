@@ -54,5 +54,25 @@ def test_rationale_is_normalized_from_image_labels_to_variant_labels() -> None:
 
     assert (
         ReportGenerator._normalize_rationale(result)
-        == "Control is clean and Challenger is broken."
+        == "базовый вариант is clean and тестовый вариант is broken."
+    )
+
+
+def test_russian_screen_labels_are_normalized_to_variant_labels() -> None:
+    result = SimulationResult(
+        experiment_id=1,
+        persona_id=1,
+        presented_order=PresentedOrder.challenger_first,
+        raw_verdict=RawVerdict.image_2,
+        mapped_verdict=MappedVerdict.control,
+        visual_quality_image_1=VisualQuality.pass_,
+        visual_quality_image_2=VisualQuality.pass_,
+        visual_issues="",
+        critical_visual_defect=False,
+        rationale="Второй экран более чистый, а на первом экране слишком много условий.",
+    )
+
+    assert (
+        ReportGenerator._normalize_rationale(result)
+        == "базовый вариант более чистый, а на тестовом варианте слишком много условий."
     )

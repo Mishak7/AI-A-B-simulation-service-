@@ -3,6 +3,7 @@ import logging
 
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api.experiments import router as experiments_router
 from app.config import get_settings
@@ -32,6 +33,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title=get_settings().app_name, lifespan=lifespan)
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
 app.include_router(experiments_router)
 
 
@@ -292,12 +294,10 @@ async def index() -> str:
       aspect-ratio: 1;
       border-radius: 50%;
       background: #fff;
-      display: grid;
-      place-items: center;
-      text-align: center;
       border: 1px solid var(--line);
-      font-weight: 600;
     }
+    .viz-summary { margin-bottom: 2px; }
+    .viz-summary strong { font-weight: 600; }
     .bars { display: grid; gap: 12px; }
     .bar-row { display: grid; grid-template-columns: 120px 1fr 46px; gap: 10px; align-items: center; font-size: 13px; }
     .track { height: 12px; background: #edf1ef; border-radius: 999px; overflow: hidden; }
@@ -367,31 +367,31 @@ async def index() -> str:
       <section class="panel">
         <h2>Настройка эксперимента</h2>
         <label>Название
-          <input id="name" value="Кредит наличными: шаг подтверждения заявки" />
+          <input id="name" value="Меню кредитов Сбера: влияние входа в ГигаЧат" />
         </label>
         <label>Цель эксперимента
-          <textarea id="goal">Повысить долю клиентов, которые завершают шаг подтверждения заявки на кредит наличными в приложении Сбербанк Онлайн.</textarea>
+          <textarea id="goal">Повысить CTR по основному CTA «Оформить кредит онлайн» на экране меню кредитов, то есть увеличить долю пользователей, которые после просмотра меню переходят к началу онлайн-оформления кредита.</textarea>
         </label>
         <label>Целевая аудитория
-          <textarea id="audience">Клиенты Сбера в России, которые уже начали оформление кредита в мобильном приложении: зарплатные клиенты, самозанятые и пользователи с разной финансовой грамотностью.</textarea>
+          <textarea id="audience">Российские розничные пользователи банковских сервисов, которые открыли раздел кредитов Сбера на десктопе. Аудитория включает действующих и потенциальных клиентов Сбера с разным уровнем финансовой грамотности, цифровой грамотности, доверия к онлайн-банкингу и готовности взять кредит. Часть пользователей активно ищет кредит, рефинансирование, рассрочку или информацию по условиям, а часть просто изучает варианты и пытается понять, подходит ли им продукт.</textarea>
         </label>
         <div class="row">
-          <label>Контрольный экран
-            <div class="upload" id="controlDrop">
-              <img id="controlPreview" alt="" />
+          <label>Базовый вариант без ГигаЧата
+            <div class="upload has-image" id="controlDrop">
+              <img id="controlPreview" src="/static/sber_credits_without_gigachat.png" alt="" />
               <div class="upload-content">
-                <span class="upload-title" id="controlName">Загрузить базовый вариант</span>
-                <span>PNG или JPG</span>
+                <span class="upload-title" id="controlName">Базовый вариант: без ГигаЧата</span>
+                <span>Можно заменить своим PNG или JPG</span>
               </div>
               <input id="control" type="file" accept="image/*" />
             </div>
           </label>
-          <label>Новый вариант
-            <div class="upload" id="challengerDrop">
-              <img id="challengerPreview" alt="" />
+          <label>Тестовый вариант с ГигаЧатом
+            <div class="upload has-image" id="challengerDrop">
+              <img id="challengerPreview" src="/static/sber_credits_with_gigachat.png" alt="" />
               <div class="upload-content">
-                <span class="upload-title" id="challengerName">Загрузить тестовый вариант</span>
-                <span>PNG или JPG</span>
+                <span class="upload-title" id="challengerName">Тестовый вариант: с ГигаЧатом</span>
+                <span>Можно заменить своим PNG или JPG</span>
               </div>
               <input id="challenger" type="file" accept="image/*" />
             </div>
@@ -407,7 +407,7 @@ async def index() -> str:
         </div>
         <div class="actions">
           <button id="run">Запустить симуляцию</button>
-          <div class="status" id="status">Ожидаем два скриншота интерфейса.</div>
+          <div class="status" id="status">Загружен пример: меню кредитов Сбера без ГигаЧата против версии с ГигаЧатом.</div>
         </div>
       </section>
 
@@ -422,8 +422,8 @@ async def index() -> str:
         <div id="report" class="empty">
           <div class="empty-inner">
             <div class="empty-visual"></div>
-            <h2>Загрузите два варианта экрана</h2>
-            <p>Сервис сравнит базовый и тестовый варианты глазами синтетических банковских клиентов и соберет результат в понятный отчет.</p>
+            <h2>Готов пример для запуска</h2>
+            <p>По умолчанию сравниваются меню кредитов Сбера без ГигаЧата и тестовый вариант с входом в ГигаЧат. Скриншоты можно заменить своими.</p>
           </div>
         </div>
       </section>
@@ -434,6 +434,11 @@ async def index() -> str:
     const statusNode = document.getElementById("status");
     const winnerNode = document.getElementById("winner");
     const subtitleNode = document.getElementById("subtitle");
+    let defaultControlFile = null;
+    let defaultChallengerFile = null;
+    let selectedControlFile = null;
+    let selectedChallengerFile = null;
+    let defaultFilesPromise = null;
 
     const labels = {
       control: "Базовый вариант",
@@ -456,10 +461,24 @@ async def index() -> str:
       input.addEventListener("change", () => {
         const file = input.files[0];
         if (!file) return;
+        if (inputId === "control") {
+          selectedControlFile = file;
+        } else {
+          selectedChallengerFile = file;
+        }
         image.src = URL.createObjectURL(file);
         name.textContent = file.name;
         box.classList.add("has-image");
       });
+    }
+
+    async function loadDefaultFile(url, filename) {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Не удалось загрузить пример ${filename}`);
+      }
+      const blob = await response.blob();
+      return new File([blob], filename, { type: blob.type || "image/png" });
     }
 
     function setStatus(text, isError = false) {
@@ -532,8 +551,9 @@ async def index() -> str:
         </div>
 
         <div class="block viz" style="--control-deg:${controlDeg}deg; --challenger-deg:${challengerDeg}deg;">
-          <div class="donut"><div class="donut-center">${winnerLabel}<br><span style="color:var(--muted);font-size:12px;">выбор персон</span></div></div>
+          <div class="donut"><div class="donut-center"></div></div>
           <div class="bars">
+            <p class="viz-summary">Победитель: <strong>${winnerLabel}</strong></p>
             <div class="bar-row"><strong>Базовый</strong><div class="track"><div class="fill control" style="--w:${controlPct}%"></div></div><span>${controlPct}%</span></div>
             <div class="bar-row"><strong>Тестовый</strong><div class="track"><div class="fill challenger" style="--w:${challengerPct}%"></div></div><span>${challengerPct}%</span></div>
             <div class="bar-row"><strong>Нет выбора</strong><div class="track"><div class="fill none" style="--w:${nonePct}%"></div></div><span>${nonePct}%</span></div>
@@ -581,6 +601,16 @@ async def index() -> str:
     setupPreview("control", "controlDrop", "controlPreview", "controlName");
     setupPreview("challenger", "challengerDrop", "challengerPreview", "challengerName");
 
+    defaultFilesPromise = Promise.all([
+      loadDefaultFile("/static/sber_credits_without_gigachat.png", "sber_credits_without_gigachat.png"),
+      loadDefaultFile("/static/sber_credits_with_gigachat.png", "sber_credits_with_gigachat.png")
+    ])
+      .then(([controlFile, challengerFile]) => {
+        defaultControlFile = controlFile;
+        defaultChallengerFile = challengerFile;
+      })
+      .catch(error => setStatus(error.message || String(error), true));
+
     document.getElementById("run").addEventListener("click", async () => {
       const button = document.getElementById("run");
       button.disabled = true;
@@ -590,8 +620,11 @@ async def index() -> str:
       reportNode.innerHTML = `<div class="empty-inner"><div class="empty-visual"></div><h2>Симуляция выполняется</h2><p>Генерируем персоны, сравниваем два варианта и собираем отчет.</p></div>`;
       setStatus("Запускаем эксперимент...");
       try {
-        const controlFile = document.getElementById("control").files[0];
-        const challengerFile = document.getElementById("challenger").files[0];
+        if (defaultFilesPromise) {
+          await defaultFilesPromise;
+        }
+        const controlFile = selectedControlFile || defaultControlFile || document.getElementById("control").files[0];
+        const challengerFile = selectedChallengerFile || defaultChallengerFile || document.getElementById("challenger").files[0];
         if (!controlFile || !challengerFile) {
           throw new Error("Загрузите оба скриншота: базовый и тестовый варианты.");
         }
