@@ -68,7 +68,7 @@ class ReportGenerator:
             top_none_reasons=json.dumps(top_none),
             recommendations=json.dumps(summary.get("recommendations", [])),
             limitations=summary.get(
-                "limitations", "Synthetic evaluation is not a replacement for real A/B testing."
+                "limitations", "Синтетическая оценка не заменяет реальный A/B-тест."
             ),
         )
         report = await session.merge(report)

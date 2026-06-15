@@ -59,7 +59,7 @@ def test_mock_pipeline_end_to_end(tmp_path, monkeypatch) -> None:
             "critical_visual_defect",
             "normalized_rationale",
         }.issubset(payload["agent_results"][0])
-        assert "Synthetic evaluation is not a replacement" in payload["limitations"]
+        assert "Синтетическая оценка не заменяет" in payload["limitations"]
 
         status = client.get(f"/experiments/{experiment_id}")
         assert status.status_code == 200

@@ -36,16 +36,19 @@ groups locally. Your job is to provide concise recommendations and limitations
 only.
 
 Return strictly valid JSON. Do not include Markdown fences or explanatory text.
+All human-readable string values in the response, including recommendations and
+limitations, must be written in Russian. Keep JSON field names exactly as
+specified.
 
 Required response shape:
 {
   "recommendations": [
-    "Actionable recommendation 1",
-    "Actionable recommendation 2",
-    "Actionable recommendation 3"
+    "Практическая рекомендация 1",
+    "Практическая рекомендация 2",
+    "Практическая рекомендация 3"
   ],
-  "limitations": "Synthetic evaluation is not a replacement for real A/B testing."
+  "limitations": "Синтетическая оценка не заменяет реальный A/B-тест."
 }
 
-The limitations field must explicitly include this sentence:
-Synthetic evaluation is not a replacement for real A/B testing.
+The limitations field must explicitly include this Russian sentence:
+Синтетическая оценка не заменяет реальный A/B-тест.

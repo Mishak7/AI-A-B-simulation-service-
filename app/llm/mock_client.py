@@ -80,8 +80,8 @@ class MockLLMClient(LLMClient):
             verdict = "none"
         confidence = ["low", "medium", "high"][int(digest[2:4], 16) % 3]
         rationale = (
-            "The selected option appears more aligned with the persona's need for clarity, "
-            "reduced friction, and confidence before converting."
+            "Выбранный вариант лучше соответствует потребности персоны в ясности, "
+            "низком трении и уверенности перед конверсией."
         )
         return SimulationVerdict(
             verdict=verdict,
@@ -92,18 +92,18 @@ class MockLLMClient(LLMClient):
     async def assess_visual_quality(self, prompt: str, image_path: str, image_label: str) -> VisualAssessment:
         return VisualAssessment(
             visual_quality="pass",
-            visual_issues=f"{image_label} has no visual integrity issues detected by the mock client.",
+            visual_issues=f"Для изображения {image_label} mock-клиент не обнаружил серьезных визуальных проблем.",
         )
 
     async def summarize_report(self, prompt: str, context: dict[str, Any]) -> dict[str, Any]:
         winner = context.get("winner", "inconclusive")
         return {
             "recommendations": [
-                f"Use the {winner} direction as a hypothesis for real user validation."
+                f"Используйте направление {winner} как гипотезу для проверки на реальных пользователях."
                 if winner != "inconclusive"
-                else "Treat the result as directional only and test clearer differentiation.",
-                "Review the most common rationale themes before changing production UI.",
-                "Run a real A/B test with production traffic before making final decisions.",
+                else "Считайте результат только направлением для размышления и проверьте более явное различие вариантов.",
+                "Перед изменением продакшен-интерфейса изучите самые частые причины выбора.",
+                "Перед финальным решением запустите реальный A/B-тест на продуктовой аудитории.",
             ],
-            "limitations": "Synthetic evaluation is not a replacement for real A/B testing.",
+            "limitations": "Синтетическая оценка не заменяет реальный A/B-тест.",
         }

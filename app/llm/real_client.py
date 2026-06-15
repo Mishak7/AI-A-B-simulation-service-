@@ -102,7 +102,7 @@ class RealLLMClient(LLMClient):
         payload = self._extract_json(response_text)
         if not isinstance(payload, dict):
             raise ValueError("Report summary response must be a JSON object")
-        payload.setdefault("limitations", "Synthetic evaluation is not a replacement for real A/B testing.")
+        payload.setdefault("limitations", "Синтетическая оценка не заменяет реальный A/B-тест.")
         payload.setdefault("recommendations", [])
         return payload
 

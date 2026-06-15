@@ -103,6 +103,9 @@ Choose the version where conversion is more likely for this specific persona,
 or choose "none" if this persona would not convert from either screenshot.
 
 Return strictly valid JSON. Do not include Markdown fences or explanatory text.
+All human-readable string values in the response, especially rationale, must be
+written in Russian. Keep JSON field names and allowed enum values exactly as
+specified.
 The verdict must be one of "image_1", "image_2", or "none". Do not return
 "control" or "challenger" in the verdict. Do not return visual quality fields;
 they are computed separately before this step.
@@ -111,5 +114,5 @@ Required response shape:
 {
   "verdict": "image_1",
   "confidence": "medium",
-  "rationale": "Short explanation focused on the persona-specific conversion factors."
+  "rationale": "Короткое объяснение, сфокусированное на специфичных для персоны факторах конверсии."
 }
