@@ -21,9 +21,12 @@ class ReportGenerator:
         results: list[SimulationResult],
         aggregation: dict[str, Any],
     ) -> ExperimentReport:
+        stable_decisions = self._stable_decisions(results)
         grouped: dict[MappedVerdict, list[str]] = defaultdict(list)
         for result in results:
-            grouped[result.mapped_verdict].append(self._normalize_rationale(result))
+            stable_decision = stable_decisions.get(result.persona_id)
+            if stable_decision is not None:
+                grouped[stable_decision].append(self._normalize_rationale(result))
 
         top_control = self._top_reasons(grouped[MappedVerdict.control])
         top_challenger = self._top_reasons(grouped[MappedVerdict.challenger])
@@ -45,6 +48,9 @@ class ReportGenerator:
             "image_2_votes": aggregation["image_2_votes"],
             "position_switch_rate": aggregation["position_switch_rate"],
             "positional_bias_score": aggregation["positional_bias_score"],
+            "stable_personas": aggregation["stable_personas"],
+            "unstable_personas": aggregation["unstable_personas"],
+            "unstable_rate": aggregation["unstable_rate"],
             "visual_stats": visual_stats,
             "experiment_context": {
                 "experiment_id": experiment.id,
@@ -71,6 +77,9 @@ class ReportGenerator:
             image_2_votes=aggregation["image_2_votes"],
             position_switch_rate=aggregation["position_switch_rate"],
             positional_bias_score=aggregation["positional_bias_score"],
+            stable_personas=aggregation["stable_personas"],
+            unstable_personas=aggregation["unstable_personas"],
+            unstable_rate=aggregation["unstable_rate"],
             top_control_reasons=json.dumps(top_control),
             top_challenger_reasons=json.dumps(top_challenger),
             top_none_reasons=json.dumps(top_none),
@@ -82,6 +91,22 @@ class ReportGenerator:
         report = await session.merge(report)
         await session.flush()
         return report
+
+    @staticmethod
+    def _stable_decisions(results: list[SimulationResult]) -> dict[int, MappedVerdict | None]:
+        by_persona: dict[int, dict[PresentedOrder, MappedVerdict]] = defaultdict(dict)
+        for result in results:
+            by_persona[result.persona_id][result.presented_order] = result.mapped_verdict
+
+        decisions: dict[int, MappedVerdict | None] = {}
+        for persona_id, orders in by_persona.items():
+            if PresentedOrder.control_first not in orders or PresentedOrder.challenger_first not in orders:
+                decisions[persona_id] = None
+                continue
+            control_first = orders[PresentedOrder.control_first]
+            challenger_first = orders[PresentedOrder.challenger_first]
+            decisions[persona_id] = control_first if control_first == challenger_first else None
+        return decisions
 
     @staticmethod
     def _normalize_rationale(result: SimulationResult) -> str:

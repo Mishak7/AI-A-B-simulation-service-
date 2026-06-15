@@ -44,7 +44,12 @@ def test_mock_pipeline_end_to_end(tmp_path, monkeypatch) -> None:
         )
         assert report.status_code == 200
         payload = report.json()
-        assert payload["control_votes"] + payload["challenger_votes"] + payload["none_votes"] == 12
+        assert (
+            payload["control_votes"] + payload["challenger_votes"] + payload["none_votes"]
+            == payload["stable_personas"]
+        )
+        assert payload["stable_personas"] + payload["unstable_personas"] == 6
+        assert 0.0 <= payload["unstable_rate"] <= 1.0
         assert payload["image_1_votes"] + payload["image_2_votes"] <= 12
         assert 0.0 <= payload["position_switch_rate"] <= 1.0
         assert 0.0 <= payload["positional_bias_score"] <= 1.0
@@ -81,6 +86,7 @@ def test_mock_pipeline_end_to_end(tmp_path, monkeypatch) -> None:
             rerun_payload["control_votes"]
             + rerun_payload["challenger_votes"]
             + rerun_payload["none_votes"]
-            == 6
+            == rerun_payload["stable_personas"]
         )
+        assert rerun_payload["stable_personas"] + rerun_payload["unstable_personas"] == 3
         assert len(rerun_payload["agent_results"]) == 6

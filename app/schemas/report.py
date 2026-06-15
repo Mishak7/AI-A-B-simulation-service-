@@ -19,6 +19,9 @@ class ExperimentReportRead(BaseModel):
     image_2_votes: int = 0
     position_switch_rate: float = 0.0
     positional_bias_score: float = 0.0
+    stable_personas: int = 0
+    unstable_personas: int = 0
+    unstable_rate: float = 0.0
     top_control_reasons: list[str]
     top_challenger_reasons: list[str]
     top_none_reasons: list[str]

@@ -88,6 +88,9 @@ async def _run_sqlite_migrations(connection) -> None:
             "image_2_votes": "INTEGER NOT NULL DEFAULT 0",
             "position_switch_rate": "FLOAT NOT NULL DEFAULT 0.0",
             "positional_bias_score": "FLOAT NOT NULL DEFAULT 0.0",
+            "stable_personas": "INTEGER NOT NULL DEFAULT 0",
+            "unstable_personas": "INTEGER NOT NULL DEFAULT 0",
+            "unstable_rate": "FLOAT NOT NULL DEFAULT 0.0",
         }
         for column_name, column_type in report_additions.items():
             if column_name not in report_columns:
@@ -518,31 +521,58 @@ async def index() -> str:
     }
 
     function renderReport(report) {
-      const total = report.control_votes + report.challenger_votes + report.none_votes;
-      const controlPct = percent(report.control_votes, total);
-      const challengerPct = percent(report.challenger_votes, total);
-      const nonePct = percent(report.none_votes, total);
-      const image1Pct = percent(report.image_1_votes, report.image_1_votes + report.image_2_votes);
-      const image2Pct = percent(report.image_2_votes, report.image_1_votes + report.image_2_votes);
-      const controlDeg = total ? (report.control_votes / total) * 360 : 0;
-      const challengerDeg = total ? controlDeg + (report.challenger_votes / total) * 360 : 0;
+      const stableTotal = report.control_votes + report.challenger_votes + report.none_votes;
+      const personaTotal = (report.stable_personas || 0) + (report.unstable_personas || 0);
+      const controlPct = percent(report.control_votes, stableTotal);
+      const challengerPct = percent(report.challenger_votes, stableTotal);
+      const nonePct = percent(report.none_votes, stableTotal);
+      const unstablePct = Math.round((report.unstable_rate || 0) * 100);
+      const controlDeg = stableTotal ? (report.control_votes / stableTotal) * 360 : 0;
+      const challengerDeg = stableTotal ? controlDeg + (report.challenger_votes / stableTotal) * 360 : 0;
       const confidence = Math.round((report.confidence_score || 0) * 100);
       const winnerLabel = labels[report.winner] || report.winner;
 
       winnerNode.textContent = `Победитель: ${winnerLabel}`;
-      subtitleNode.textContent = `${total} симуляций: каждая персона увидела оба порядка показа`;
+      subtitleNode.textContent = `${personaTotal} персон: результат считается только по стабильным`;
 
-      const agentRows = (report.agent_results || []).slice(0, 8).map((agent, index) => {
-        const mapped = agent.mapped_verdict;
+      const personaPairs = new Map();
+      for (const agent of report.agent_results || []) {
+        if (!personaPairs.has(agent.persona_id)) {
+          personaPairs.set(agent.persona_id, []);
+        }
+        personaPairs.get(agent.persona_id).push(agent);
+      }
+      const stablePersonaRows = Array.from(personaPairs.entries())
+        .map(([personaId, results]) => {
+          if (results.length < 2) return null;
+          const firstChoice = results[0].mapped_verdict;
+          const isStable = results.every(result => result.mapped_verdict === firstChoice);
+          if (!isStable) return null;
+          const hasVisualDefect = results.some(result => result.critical_visual_defect);
+          const confidenceValues = [...new Set(results.map(result => result.confidence))];
+          return {
+            personaId,
+            choice: firstChoice,
+            confidence: confidenceValues.length === 1 ? confidenceValues[0] : "mixed",
+            hasVisualDefect,
+            rationale: results[0].normalized_rationale || results[0].rationale
+          };
+        })
+        .filter(Boolean);
+
+      const agentRows = stablePersonaRows.slice(0, 8).map((persona, index) => {
+        const mapped = persona.choice;
         const mappedClass = mapped === "control" ? "control" : mapped === "challenger" ? "challenger" : "none";
-        const visualBad = agent.critical_visual_defect ? `<span class="pill bad">визуальный дефект</span>` : "";
+        const visualState = persona.hasVisualDefect ? `<span class="pill bad">визуальный дефект</span>` : "без критичных проблем";
+        const confidenceLabel = persona.confidence === "mixed" ? "смешанная" : labels[persona.confidence] || persona.confidence;
         return `
           <tr>
             <td>${index + 1}</td>
+            <td>${persona.personaId}</td>
             <td><span class="pill ${mappedClass}">${labels[mapped] || mapped}</span></td>
-            <td>${labels[agent.confidence] || agent.confidence}</td>
-            <td>${visualBad || labels[agent.visual_quality_image_1] || agent.visual_quality_image_1}</td>
-            <td>${escapeHtml(agent.normalized_rationale || agent.rationale)}</td>
+            <td>${confidenceLabel}</td>
+            <td>${visualState}</td>
+            <td>${escapeHtml(persona.rationale)}</td>
           </tr>
         `;
       }).join("");
@@ -550,10 +580,10 @@ async def index() -> str:
       reportNode.className = "report-body";
       reportNode.innerHTML = `
         <div class="metrics">
-          <div class="metric"><div class="metric-label">Всего симуляций</div><div class="metric-value">${total}</div></div>
+          <div class="metric"><div class="metric-label">Всего персон</div><div class="metric-value">${personaTotal}</div></div>
           <div class="metric"><div class="metric-label">Базовый вариант</div><div class="metric-value">${report.control_votes}</div></div>
           <div class="metric"><div class="metric-label">Тестовый вариант</div><div class="metric-value">${report.challenger_votes}</div></div>
-          <div class="metric"><div class="metric-label">Смена решения</div><div class="metric-value">${Math.round((report.position_switch_rate || 0) * 100)}%</div></div>
+          <div class="metric"><div class="metric-label">Нестабильные</div><div class="metric-value">${unstablePct}%</div></div>
         </div>
 
         <div class="block viz" style="--control-deg:${controlDeg}deg; --challenger-deg:${challengerDeg}deg;">
@@ -563,9 +593,7 @@ async def index() -> str:
             <div class="bar-row"><strong>Базовый</strong><div class="track"><div class="fill control" style="--w:${controlPct}%"></div></div><span>${controlPct}%</span></div>
             <div class="bar-row"><strong>Тестовый</strong><div class="track"><div class="fill challenger" style="--w:${challengerPct}%"></div></div><span>${challengerPct}%</span></div>
             <div class="bar-row"><strong>Нет выбора</strong><div class="track"><div class="fill none" style="--w:${nonePct}%"></div></div><span>${nonePct}%</span></div>
-            <p class="viz-summary">Позиционный bias: <strong>${Math.round((report.positional_bias_score || 0) * 100)}%</strong></p>
-            <div class="bar-row"><strong>Image 1</strong><div class="track"><div class="fill control" style="--w:${image1Pct}%"></div></div><span>${image1Pct}%</span></div>
-            <div class="bar-row"><strong>Image 2</strong><div class="track"><div class="fill challenger" style="--w:${image2Pct}%"></div></div><span>${image2Pct}%</span></div>
+            <p class="viz-summary">Исключено нестабильных персон: <strong>${report.unstable_personas || 0} из ${personaTotal}</strong></p>
           </div>
         </div>
 
@@ -584,24 +612,13 @@ async def index() -> str:
           </div>
         </div>
 
-        <div class="split">
-          <div class="block">
-            <h3>Почему выбирали базовый вариант</h3>
-            ${renderList(report.top_control_reasons, "Нет устойчивых причин в пользу базового варианта.")}
-          </div>
-          <div class="block">
-            <h3>Почему выбирали тестовый вариант</h3>
-            ${renderList(report.top_challenger_reasons, "Нет устойчивых причин в пользу тестового варианта.")}
-          </div>
-        </div>
-
         <div class="block">
-          <h3>Голоса отдельных персон</h3>
+          <h3>Голоса стабильных персон</h3>
           <table class="agents">
             <thead>
-              <tr><th>#</th><th>Выбор</th><th>Уверенность</th><th>QA</th><th>Причина</th></tr>
+              <tr><th>#</th><th>Persona ID</th><th>Выбор</th><th>Уверенность</th><th>QA</th><th>Причина</th></tr>
             </thead>
-            <tbody>${agentRows || `<tr><td colspan="5">Нет данных по персонам.</td></tr>`}</tbody>
+            <tbody>${agentRows || `<tr><td colspan="6">Нет стабильных персон для отображения.</td></tr>`}</tbody>
           </table>
         </div>
       `;
