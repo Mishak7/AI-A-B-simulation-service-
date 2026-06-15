@@ -45,6 +45,21 @@ Challenger visual issues:
 Experiment context:
 {{ experiment_context or "None" }}
 
+Russian retail banking evaluation lens:
+
+When relevant to the persona and product, consider that Russian banking users may be sensitive to:
+
+* unclear fees, rates, commissions, subscriptions, insurance, or hidden conditions
+* personal data requests, income questions, passport data, and consent checkboxes
+* fraud, phishing, suspicious wording, aggressive urgency, and irreversible actions
+* whether the offer is preliminary or final
+* clarity of monthly payment, full cost, term, overpayment, penalties, and next steps
+* visible trust cues: official tone, security signals, recognizable bank context, support options
+* availability of human support or branch support for users who need reassurance
+
+Do not assume every Russian user is cautious or distrustful. Apply these factors according to the specific persona profile.
+
+
 Important rule:
 If one variant has visual_quality = "fail" and the other does not, do not choose
 the failed variant as the winner, even if it contains better copy, clearer

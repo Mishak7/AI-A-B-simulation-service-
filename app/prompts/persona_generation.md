@@ -23,13 +23,19 @@ Challenger image description:
 Experiment context:
 {{ experiment_context or "None" }}
 
-Generate personas with meaningful diversity across:
-- privacy orientation, from strict to relaxed
-- tolerance for initial friction, from low to high
+Generate personas for Russian retail banking, ensure diversity across:
+- age and digital literacy
+- trust in online banking
+- sensitivity to fraud and scams
+- financial literacy
+- income stability
+- region: large city / small city / rural area
+- product context: credit, savings, payments, investments
+- channel preference: mobile-first / web / branch support
+- tolerance for forms and personal data requests
 - time sensitivity, from rushed to leisurely
-- comfort with personalization, from low to high
 - purchase or conversion intent, from casual browsing to active decision-making
-- risk tolerance, decisiveness, technical literacy, age, and lifestyle
+- tolerance for initial friction, from low to high
 
 Personas may arrive from different channels such as social media, ads, organic
 search, direct traffic, recommendations, or LLM/chat discovery. Most personas
@@ -54,6 +60,16 @@ Each persona object must include exactly these string fields:
 - goals
 - pain_points
 - technical_savviness
+- financial_literacy
+- digital_literacy
+- trust_in_online_banking
+- fraud_anxiety
+- fee_sensitivity
+- privacy_sensitivity
+- banking_channel_preference
+- decision_style
+- region_type
+- income_stability
 - online_behavior
 - browsing_context
 - task_context
@@ -72,6 +88,16 @@ Example response shape:
       "goals": "Find a trustworthy option without wasting time",
       "pain_points": "Hidden fees, unclear claims, long forms",
       "technical_savviness": "Medium",
+      "financial_literacy": "Medium",
+      "digital_literacy": "High",
+      "trust_in_online_banking": "Medium",
+      "fraud_anxiety": "High",
+      "fee_sensitivity": "High",
+      "privacy_sensitivity": "Medium",
+      "banking_channel_preference": "Mobile-first with web backup",
+      "decision_style": "Careful comparer",
+      "region_type": "Large city",
+      "income_stability": "Stable monthly income",
       "online_behavior": "Compares several options before acting",
       "browsing_context": "Arrived from search during a short work break",
       "task_context": "Deciding whether the interface gives enough confidence to convert"

@@ -41,6 +41,20 @@ class MockLLMClient(LLMClient):
                     goals="Complete the task quickly with low uncertainty.",
                     pain_points="Confusing navigation, unclear value proposition, and excessive form friction.",
                     technical_savviness=savviness,
+                    financial_literacy=["low", "medium", "high"][absolute_index % 3],
+                    digital_literacy=["low", "medium", "high"][absolute_index % 3],
+                    trust_in_online_banking=["low", "medium", "high"][(absolute_index + 1) % 3],
+                    fraud_anxiety=["low", "medium", "high"][(absolute_index + 2) % 3],
+                    fee_sensitivity=["low", "medium", "high"][(absolute_index + 1) % 3],
+                    privacy_sensitivity=["low", "medium", "high"][(absolute_index + 2) % 3],
+                    banking_channel_preference=["mobile-first", "web", "branch support"][
+                        absolute_index % 3
+                    ],
+                    decision_style=["quick scanner", "careful comparer", "advice-seeking"][
+                        absolute_index % 3
+                    ],
+                    region_type=["large city", "small city", "rural area"][absolute_index % 3],
+                    income_stability=["unstable", "moderate", "stable"][absolute_index % 3],
                     online_behavior="Compares options, scans headings, and looks for proof before acting.",
                     browsing_context="Short focused session on desktop or mobile during a busy day.",
                     task_context="Evaluating which interface better supports the stated conversion goal.",

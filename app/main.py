@@ -57,6 +57,25 @@ async def _run_sqlite_migrations(connection) -> None:
                     f"ALTER TABLE simulation_results ADD COLUMN {column_name} {column_type}"
                 )
 
+        persona_columns = columns("personas")
+        persona_additions = {
+            "financial_literacy": "VARCHAR(128) NOT NULL DEFAULT ''",
+            "digital_literacy": "VARCHAR(128) NOT NULL DEFAULT ''",
+            "trust_in_online_banking": "VARCHAR(128) NOT NULL DEFAULT ''",
+            "fraud_anxiety": "VARCHAR(128) NOT NULL DEFAULT ''",
+            "fee_sensitivity": "VARCHAR(128) NOT NULL DEFAULT ''",
+            "privacy_sensitivity": "VARCHAR(128) NOT NULL DEFAULT ''",
+            "banking_channel_preference": "VARCHAR(255) NOT NULL DEFAULT ''",
+            "decision_style": "VARCHAR(255) NOT NULL DEFAULT ''",
+            "region_type": "VARCHAR(128) NOT NULL DEFAULT ''",
+            "income_stability": "VARCHAR(128) NOT NULL DEFAULT ''",
+        }
+        for column_name, column_type in persona_additions.items():
+            if column_name not in persona_columns:
+                sync_connection.exec_driver_sql(
+                    f"ALTER TABLE personas ADD COLUMN {column_name} {column_type}"
+                )
+
         report_columns = columns("experiment_reports")
         report_additions = {
             "image_1_visual_fail_rate": "FLOAT NOT NULL DEFAULT 0.0",
