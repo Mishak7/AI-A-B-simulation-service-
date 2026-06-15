@@ -14,11 +14,11 @@ Number of personas to generate exactly:
 Existing personas in this experiment batch:
 {{ existing_personas or "None" }}
 
-Control image description:
-{{ control_image_description or "Local uploaded control screenshot." }}
+Image 1 description:
+{{ image_1_description or "Local uploaded interface screenshot." }}
 
-Challenger image description:
-{{ challenger_image_description or "Local uploaded challenger screenshot." }}
+Image 2 description:
+{{ image_2_description or "Local uploaded interface screenshot." }}
 
 Experiment context:
 {{ experiment_context or "None" }}

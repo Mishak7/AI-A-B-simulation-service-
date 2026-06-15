@@ -44,13 +44,16 @@ def test_mock_pipeline_end_to_end(tmp_path, monkeypatch) -> None:
         )
         assert report.status_code == 200
         payload = report.json()
-        assert payload["control_votes"] + payload["challenger_votes"] + payload["none_votes"] == 6
+        assert payload["control_votes"] + payload["challenger_votes"] + payload["none_votes"] == 12
+        assert payload["image_1_votes"] + payload["image_2_votes"] <= 12
+        assert 0.0 <= payload["position_switch_rate"] <= 1.0
+        assert 0.0 <= payload["positional_bias_score"] <= 1.0
         assert payload["winner"] in {"control", "challenger", "inconclusive"}
         assert payload["image_1_visual_fail_rate"] == 0.0
         assert payload["image_2_visual_fail_rate"] == 0.0
         assert payload["control_visual_fail_rate"] == 0.0
         assert payload["challenger_visual_fail_rate"] == 0.0
-        assert len(payload["agent_results"]) == 6
+        assert len(payload["agent_results"]) == 12
         assert {
             "raw_verdict",
             "mapped_verdict",
@@ -59,6 +62,9 @@ def test_mock_pipeline_end_to_end(tmp_path, monkeypatch) -> None:
             "critical_visual_defect",
             "normalized_rationale",
         }.issubset(payload["agent_results"][0])
+        assert {
+            result["presented_order"] for result in payload["agent_results"]
+        } == {"control_first", "challenger_first"}
         assert "Синтетическая оценка не заменяет" in payload["limitations"]
 
         status = client.get(f"/experiments/{experiment_id}")
@@ -75,6 +81,6 @@ def test_mock_pipeline_end_to_end(tmp_path, monkeypatch) -> None:
             rerun_payload["control_votes"]
             + rerun_payload["challenger_votes"]
             + rerun_payload["none_votes"]
-            == 3
+            == 6
         )
-        assert len(rerun_payload["agent_results"]) == 3
+        assert len(rerun_payload["agent_results"]) == 6

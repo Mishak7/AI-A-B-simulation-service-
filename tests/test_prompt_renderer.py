@@ -38,3 +38,27 @@ def test_prompt_renderer_missing_variables_render_empty(tmp_path: Path) -> None:
     renderer = PromptRenderer(prompt_dir=tmp_path)
 
     assert renderer.render("optional.md", {}) == "Optional: "
+
+
+def test_persona_simulation_prompt_uses_neutral_image_labels() -> None:
+    renderer = PromptRenderer()
+
+    rendered = renderer.render(
+        "persona_simulation.md",
+        {
+            "persona_profile": {"name": "Test"},
+            "conversion_goal": "Click CTA",
+            "target_audience": "Audience",
+            "image_1_visual_quality": "pass",
+            "image_1_visual_issues": "None",
+            "image_2_visual_quality": "pass",
+            "image_2_visual_issues": "None",
+            "experiment_context": {},
+        },
+    )
+
+    assert "Control" not in rendered
+    assert "Challenger" not in rendered
+    assert "presented_order" not in rendered
+    assert "Image 1 visual quality" in rendered
+    assert "Image 2 visual quality" in rendered

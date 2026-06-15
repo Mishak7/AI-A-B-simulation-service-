@@ -65,23 +65,22 @@ class RealLLMClient(LLMClient):
         context: dict[str, Any],
     ) -> SimulationVerdict:
         logger.info(
-            "Calling real VLM for simulation presented_order=%s image_1=%s image_2=%s",
-            context.get("presented_order"),
-            context.get("image_1_label"),
-            context.get("image_2_label"),
+            "Calling real VLM for neutralized pairwise simulation image_1_source=%s image_2_source=%s",
+            context.get("image_1_source"),
+            context.get("image_2_source"),
         )
         content = [
             {"type": "text", "text": prompt},
             {"type": "text", "text": "Image 1:"},
             self._image_content_part(
                 control_image_path
-                if context.get("image_1_label") == "Control"
+                if context.get("image_1_source") == "Control"
                 else challenger_image_path
             ),
             {"type": "text", "text": "Image 2:"},
             self._image_content_part(
                 challenger_image_path
-                if context.get("image_2_label") == "Challenger"
+                if context.get("image_2_source") == "Challenger"
                 else control_image_path
             ),
         ]

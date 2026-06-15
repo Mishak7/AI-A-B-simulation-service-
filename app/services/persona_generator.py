@@ -28,8 +28,8 @@ class PersonaGenerator:
                 "target_audience": experiment.target_audience,
                 "num_personas": current_batch_size,
                 "existing_personas": existing_personas,
-                "control_image_description": "Local uploaded control screenshot.",
-                "challenger_image_description": "Local uploaded challenger screenshot.",
+                "image_1_description": "Local uploaded interface screenshot.",
+                "image_2_description": "Local uploaded interface screenshot.",
                 "experiment_context": {
                     "experiment_id": experiment.id,
                     "experiment_name": experiment.name,

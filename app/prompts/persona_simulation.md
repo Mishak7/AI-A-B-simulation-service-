@@ -15,32 +15,23 @@ Conversion goal:
 Target audience:
 {{ target_audience or "General audience" }}
 
-Presented order:
-{{ presented_order }}
-
-Image 1 represents:
-{{ image_1_label }}
-
-Image 2 represents:
-{{ image_2_label }}
-
 Evaluation guidelines:
 {{ evaluation_guidelines or "Choose the interface more likely to drive the conversion goal for this persona." }}
 
 Precomputed visual QA. Treat these as fixed facts. Do not re-evaluate which
 image is visually broken and do not invent different visual quality labels.
 
-Control visual quality:
-{{ control_visual_quality }}
+Image 1 visual quality:
+{{ image_1_visual_quality }}
 
-Control visual issues:
-{{ control_visual_issues }}
+Image 1 visual issues:
+{{ image_1_visual_issues }}
 
-Challenger visual quality:
-{{ challenger_visual_quality }}
+Image 2 visual quality:
+{{ image_2_visual_quality }}
 
-Challenger visual issues:
-{{ challenger_visual_issues }}
+Image 2 visual issues:
+{{ image_2_visual_issues }}
 
 Experiment context:
 {{ experiment_context or "None" }}

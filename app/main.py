@@ -84,6 +84,10 @@ async def _run_sqlite_migrations(connection) -> None:
             "image_2_visual_fail_rate": "FLOAT NOT NULL DEFAULT 0.0",
             "control_visual_fail_rate": "FLOAT NOT NULL DEFAULT 0.0",
             "challenger_visual_fail_rate": "FLOAT NOT NULL DEFAULT 0.0",
+            "image_1_votes": "INTEGER NOT NULL DEFAULT 0",
+            "image_2_votes": "INTEGER NOT NULL DEFAULT 0",
+            "position_switch_rate": "FLOAT NOT NULL DEFAULT 0.0",
+            "positional_bias_score": "FLOAT NOT NULL DEFAULT 0.0",
         }
         for column_name, column_type in report_additions.items():
             if column_name not in report_columns:
@@ -518,13 +522,15 @@ async def index() -> str:
       const controlPct = percent(report.control_votes, total);
       const challengerPct = percent(report.challenger_votes, total);
       const nonePct = percent(report.none_votes, total);
+      const image1Pct = percent(report.image_1_votes, report.image_1_votes + report.image_2_votes);
+      const image2Pct = percent(report.image_2_votes, report.image_1_votes + report.image_2_votes);
       const controlDeg = total ? (report.control_votes / total) * 360 : 0;
       const challengerDeg = total ? controlDeg + (report.challenger_votes / total) * 360 : 0;
       const confidence = Math.round((report.confidence_score || 0) * 100);
       const winnerLabel = labels[report.winner] || report.winner;
 
       winnerNode.textContent = `Победитель: ${winnerLabel}`;
-      subtitleNode.textContent = `${total} персон оценили два варианта интерфейса`;
+      subtitleNode.textContent = `${total} симуляций: каждая персона увидела оба порядка показа`;
 
       const agentRows = (report.agent_results || []).slice(0, 8).map((agent, index) => {
         const mapped = agent.mapped_verdict;
@@ -544,10 +550,10 @@ async def index() -> str:
       reportNode.className = "report-body";
       reportNode.innerHTML = `
         <div class="metrics">
-          <div class="metric"><div class="metric-label">Всего голосов</div><div class="metric-value">${total}</div></div>
+          <div class="metric"><div class="metric-label">Всего симуляций</div><div class="metric-value">${total}</div></div>
           <div class="metric"><div class="metric-label">Базовый вариант</div><div class="metric-value">${report.control_votes}</div></div>
           <div class="metric"><div class="metric-label">Тестовый вариант</div><div class="metric-value">${report.challenger_votes}</div></div>
-          <div class="metric"><div class="metric-label">Уверенность</div><div class="metric-value">${confidence}%</div></div>
+          <div class="metric"><div class="metric-label">Смена решения</div><div class="metric-value">${Math.round((report.position_switch_rate || 0) * 100)}%</div></div>
         </div>
 
         <div class="block viz" style="--control-deg:${controlDeg}deg; --challenger-deg:${challengerDeg}deg;">
@@ -557,6 +563,9 @@ async def index() -> str:
             <div class="bar-row"><strong>Базовый</strong><div class="track"><div class="fill control" style="--w:${controlPct}%"></div></div><span>${controlPct}%</span></div>
             <div class="bar-row"><strong>Тестовый</strong><div class="track"><div class="fill challenger" style="--w:${challengerPct}%"></div></div><span>${challengerPct}%</span></div>
             <div class="bar-row"><strong>Нет выбора</strong><div class="track"><div class="fill none" style="--w:${nonePct}%"></div></div><span>${nonePct}%</span></div>
+            <p class="viz-summary">Позиционный bias: <strong>${Math.round((report.positional_bias_score || 0) * 100)}%</strong></p>
+            <div class="bar-row"><strong>Image 1</strong><div class="track"><div class="fill control" style="--w:${image1Pct}%"></div></div><span>${image1Pct}%</span></div>
+            <div class="bar-row"><strong>Image 2</strong><div class="track"><div class="fill challenger" style="--w:${image2Pct}%"></div></div><span>${image2Pct}%</span></div>
           </div>
         </div>
 

@@ -37,15 +37,16 @@ class SimulationRunner:
             ),
         )
 
-        async def simulate(index: int, persona: Persona) -> dict[str, Any]:
+        async def simulate(persona: Persona, presented_order: PresentedOrder) -> dict[str, Any]:
             async with semaphore:
-                presented_order = (
-                    PresentedOrder.control_first if index % 2 == 0 else PresentedOrder.challenger_first
-                )
                 if presented_order == PresentedOrder.control_first:
                     image_1_label, image_2_label = "Control", "Challenger"
+                    image_1_visual = control_visual
+                    image_2_visual = challenger_visual
                 else:
                     image_1_label, image_2_label = "Challenger", "Control"
+                    image_1_visual = challenger_visual
+                    image_2_visual = control_visual
 
                 persona_profile = {
                     "name": persona.name,
@@ -76,14 +77,13 @@ class SimulationRunner:
                     "persona_profile": persona_profile,
                     "conversion_goal": experiment.conversion_goal,
                     "target_audience": experiment.target_audience,
-                    "image_1_label": image_1_label,
-                    "image_2_label": image_2_label,
-                    "presented_order": presented_order.value,
+                    "image_1_source": image_1_label,
+                    "image_2_source": image_2_label,
                     "evaluation_guidelines": "Evaluate which screenshot is more likely to convert.",
-                    "control_visual_quality": control_visual.visual_quality,
-                    "control_visual_issues": control_visual.visual_issues,
-                    "challenger_visual_quality": challenger_visual.visual_quality,
-                    "challenger_visual_issues": challenger_visual.visual_issues,
+                    "image_1_visual_quality": image_1_visual.visual_quality,
+                    "image_1_visual_issues": image_1_visual.visual_issues,
+                    "image_2_visual_quality": image_2_visual.visual_quality,
+                    "image_2_visual_issues": image_2_visual.visual_issues,
                     "experiment_context": {
                         "experiment_id": experiment.id,
                         "experiment_name": experiment.name,
@@ -96,12 +96,6 @@ class SimulationRunner:
                     challenger_image_path=experiment.challenger_image_path or "",
                     context=context,
                 )
-                if presented_order == PresentedOrder.control_first:
-                    image_1_visual = control_visual
-                    image_2_visual = challenger_visual
-                else:
-                    image_1_visual = challenger_visual
-                    image_2_visual = control_visual
 
                 return {
                     "persona_id": persona.id,
@@ -111,14 +105,23 @@ class SimulationRunner:
                     "confidence": ConfidenceLevel(verdict.confidence),
                     "visual_quality_image_1": VisualQuality(image_1_visual.visual_quality),
                     "visual_quality_image_2": VisualQuality(image_2_visual.visual_quality),
-                    "visual_issues": self._format_visual_issues(control_visual, challenger_visual),
+                    "visual_issues": self._format_visual_issues(image_1_visual, image_2_visual),
                     "critical_visual_defect": (
                         image_1_visual.visual_quality == "fail" or image_2_visual.visual_quality == "fail"
                     ),
                     "rationale": verdict.rationale,
                 }
 
-        payloads = await asyncio.gather(*(simulate(index, persona) for index, persona in enumerate(personas)))
+        payloads = await asyncio.gather(
+            *(
+                simulate(persona, presented_order)
+                for persona in personas
+                for presented_order in (
+                    PresentedOrder.control_first,
+                    PresentedOrder.challenger_first,
+                )
+            )
+        )
         results: list[SimulationResult] = []
         for payload in payloads:
             result = SimulationResult(experiment_id=experiment.id, **payload)
@@ -141,12 +144,12 @@ class SimulationRunner:
         return await self.llm_client.assess_visual_quality(prompt, image_path, label)
 
     @staticmethod
-    def _format_visual_issues(control_visual, challenger_visual) -> str:
+    def _format_visual_issues(image_1_visual, image_2_visual) -> str:
         return (
-            f"Control visual quality: {control_visual.visual_quality}. "
-            f"Control issues: {control_visual.visual_issues} "
-            f"Challenger visual quality: {challenger_visual.visual_quality}. "
-            f"Challenger issues: {challenger_visual.visual_issues}"
+            f"Image 1 visual quality: {image_1_visual.visual_quality}. "
+            f"Image 1 issues: {image_1_visual.visual_issues} "
+            f"Image 2 visual quality: {image_2_visual.visual_quality}. "
+            f"Image 2 issues: {image_2_visual.visual_issues}"
         )
 
     @staticmethod
