@@ -297,6 +297,119 @@ async def index() -> str:
       background: linear-gradient(90deg, var(--green) 54%, var(--blue) 54% 82%, var(--yellow) 82%);
       border-radius: 999px;
     }
+    .running-report {
+      place-items: stretch;
+      align-content: start;
+      text-align: left;
+      color: var(--text);
+    }
+    .run-progress {
+      display: grid;
+      gap: 18px;
+      width: 100%;
+      max-width: 760px;
+      margin: 0 auto;
+    }
+    .run-progress-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: flex-start;
+    }
+    .run-progress-copy {
+      display: grid;
+      gap: 6px;
+    }
+    .run-progress-copy h2 {
+      margin: 0;
+    }
+    .run-progress-copy p,
+    .run-progress-eta,
+    .stage-count {
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .run-progress-percent {
+      min-width: 72px;
+      text-align: right;
+      font-size: 28px;
+      line-height: 1;
+      font-weight: 650;
+      color: var(--green-dark);
+    }
+    .run-progress-track {
+      position: relative;
+      height: 8px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #e3ece9;
+    }
+    .run-progress-fill {
+      height: 100%;
+      width: var(--progress-width, 2%);
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--green), var(--blue));
+      transition: width 0.35s ease;
+    }
+    .run-progress-track::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 96px;
+      border-radius: inherit;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.78), transparent);
+      animation: progress-sweep 1.35s ease-in-out infinite;
+    }
+    @keyframes progress-sweep {
+      from { transform: translateX(-110px); }
+      to { transform: translateX(760px); }
+    }
+    .run-progress.done .run-progress-track::after,
+    .run-progress.failed .run-progress-track::after {
+      display: none;
+    }
+    .run-stages {
+      display: grid;
+      gap: 10px;
+    }
+    .run-stage {
+      display: grid;
+      grid-template-columns: 20px 1fr auto;
+      gap: 10px;
+      align-items: center;
+      padding: 11px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+    }
+    .stage-dot {
+      width: 10px;
+      aspect-ratio: 1;
+      border-radius: 50%;
+      background: #c8d4d1;
+      justify-self: center;
+    }
+    .stage-label {
+      color: #26352f;
+      font-size: 13px;
+      font-weight: 560;
+    }
+    .run-stage.active .stage-dot {
+      background: var(--green);
+      box-shadow: 0 0 0 5px rgba(18, 161, 84, 0.12);
+    }
+    .run-stage.done .stage-dot {
+      background: var(--blue);
+    }
+    .run-stage.failed .stage-dot {
+      background: var(--red);
+    }
+    .run-stage.failed .stage-label,
+    .run-stage.failed .stage-count {
+      color: var(--red);
+      font-weight: 600;
+    }
     .report-body { padding: 20px; display: grid; gap: 18px; }
     .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
     .metric {
@@ -516,6 +629,8 @@ async def index() -> str:
     let selectedChallengerFile = null;
     let defaultFilesPromise = null;
     let logPoller = null;
+    let progressState = null;
+    let sessionLogMarker = null;
 
     const labels = {
       control: "Базовый вариант",
@@ -595,12 +710,211 @@ async def index() -> str:
       return text ? `<p>${escapeHtml(text)}</p>` : `<p>${emptyText}</p>`;
     }
 
+    async function logSnapshot() {
+      const payload = await fetch("/logs?limit=1000").then(parseResponse).catch(() => ({lines: []}));
+      return payload.lines || [];
+    }
+
+    function linesAfterMarker(lines, marker) {
+      if (!Array.isArray(lines) || marker === null) return [];
+      let markerIndex = -1;
+      for (let index = lines.length - 1; index >= 0; index -= 1) {
+        if (lines[index] === marker) {
+          markerIndex = index;
+          break;
+        }
+      }
+      return markerIndex >= 0 ? lines.slice(markerIndex + 1) : lines;
+    }
+
+    function currentSessionLines(lines) {
+      if (!Array.isArray(lines)) return [];
+      if (sessionLogMarker === null) return [];
+      const recentLines = linesAfterMarker(lines, sessionLogMarker);
+      if (!progressState || !progressState.experimentId) return recentLines;
+      const experimentNeedle = `experiment_id=${progressState.experimentId}`;
+      return recentLines.filter(line => {
+        return (
+          line.includes(experimentNeedle) ||
+          line.includes("Selecting LLM client provider=") ||
+          line.includes("Using RealLLMClient") ||
+          line.includes("Using MockLLMClient") ||
+          line.includes("Initialized RealLLMClient") ||
+          line.includes("Calling real LLM") ||
+          line.includes("Calling real VLM") ||
+          line.includes("LLM request failed")
+        );
+      });
+    }
+
+    function renderRunningProgress(totalPersonas, baselineMarker) {
+      progressState = {
+        baselineMarker,
+        experimentId: null,
+        startedAt: Date.now(),
+        totalPersonas,
+        totalDecisions: totalPersonas * 2,
+        percent: 0,
+        active: true
+      };
+      reportNode.className = "empty running-report";
+      reportNode.innerHTML = `
+        <div class="run-progress" id="runProgress">
+          <div class="run-progress-top">
+            <div class="run-progress-copy">
+              <h2>Симуляция выполняется</h2>
+              <p id="progressStageText">Создаем эксперимент и готовим изображения.</p>
+              <div class="run-progress-eta" id="progressEta">Оцениваем время</div>
+            </div>
+            <div class="run-progress-percent" id="progressPercent">0%</div>
+          </div>
+          <div class="run-progress-track" aria-hidden="true">
+            <div class="run-progress-fill"></div>
+          </div>
+          <div class="run-stages">
+            <div class="run-stage active" data-stage="setup"><span class="stage-dot"></span><span class="stage-label">Создание эксперимента</span><span class="stage-count">в процессе</span></div>
+            <div class="run-stage" data-stage="upload"><span class="stage-dot"></span><span class="stage-label">Загрузка изображений</span><span class="stage-count">ожидает</span></div>
+            <div class="run-stage" data-stage="personas"><span class="stage-dot"></span><span class="stage-label">Генерация персон</span><span class="stage-count">0 / ${totalPersonas}</span></div>
+            <div class="run-stage" data-stage="visual"><span class="stage-dot"></span><span class="stage-label">Проверка визуала</span><span class="stage-count">ожидает</span></div>
+            <div class="run-stage" data-stage="simulation"><span class="stage-dot"></span><span class="stage-label">Голосование персон</span><span class="stage-count">0 / ${totalPersonas * 2}</span></div>
+            <div class="run-stage" data-stage="report"><span class="stage-dot"></span><span class="stage-label">Сборка отчета</span><span class="stage-count">ожидает</span></div>
+          </div>
+        </div>
+      `;
+      updateProgressPercent(2);
+    }
+
+    function setProgressStage(stageName, state, countText) {
+      const stage = reportNode.querySelector(`[data-stage="${stageName}"]`);
+      if (!stage) return;
+      stage.className = `run-stage ${state || ""}`.trim();
+      if (countText !== undefined) {
+        stage.querySelector(".stage-count").textContent = countText;
+      }
+    }
+
+    function setProgressText(text) {
+      const node = document.getElementById("progressStageText");
+      if (node) node.textContent = text;
+    }
+
+    function updateProgressPercent(percent) {
+      if (!progressState) return;
+      const safePercent = Math.max(progressState.percent || 0, Math.min(100, Math.round(percent)));
+      progressState.percent = safePercent;
+      const progress = document.getElementById("runProgress");
+      const fill = reportNode.querySelector(".run-progress-fill");
+      const percentNode = document.getElementById("progressPercent");
+      const etaNode = document.getElementById("progressEta");
+      if (fill) fill.style.setProperty("--progress-width", `${Math.max(2, safePercent)}%`);
+      if (percentNode) percentNode.textContent = `${safePercent}%`;
+      if (!etaNode) return;
+      if (safePercent >= 100) {
+        etaNode.textContent = "Готово";
+        if (progress) progress.classList.add("done");
+        return;
+      }
+      if (safePercent < 8) {
+        etaNode.textContent = "Оцениваем время";
+        return;
+      }
+      const elapsedSeconds = Math.max(1, Math.round((Date.now() - progressState.startedAt) / 1000));
+      const remainingSeconds = Math.max(1, Math.round((elapsedSeconds * (100 - safePercent)) / safePercent));
+      etaNode.textContent = `Осталось: ~${formatDuration(remainingSeconds)}`;
+    }
+
+    function formatDuration(seconds) {
+      if (seconds < 60) return `${seconds} с`;
+      const minutes = Math.floor(seconds / 60);
+      const rest = seconds % 60;
+      return rest ? `${minutes} мин ${rest} с` : `${minutes} мин`;
+    }
+
+    function updateProgressFromLogs(lines) {
+      if (!progressState || !progressState.active) return;
+      const recentLines = linesAfterMarker(lines, progressState.baselineMarker);
+      const scoped = progressState.experimentId
+        ? recentLines.filter(line => line.includes(`experiment_id=${progressState.experimentId}`))
+        : recentLines;
+      const generatedPersonas = Math.min(
+        progressState.totalPersonas,
+        scoped.filter(line => line.includes("Generated persona experiment_id=")).length
+      );
+      const decisions = Math.min(
+        progressState.totalDecisions,
+        scoped.filter(line => line.includes("Persona decision experiment_id=")).length
+      );
+      const visualDone = scoped.some(line => line.includes("Visual QA experiment_id=")) || decisions > 0;
+      const reportStarted = scoped.some(line => line.includes("Report generation started experiment_id="));
+      const reportDone = scoped.some(line => line.includes("Report generation finished experiment_id="));
+      const runDone = scoped.some(line => line.includes("Run completed experiment_id="));
+
+      if (progressState.experimentId) setProgressStage("setup", "done", "готово");
+      setProgressStage(
+        "personas",
+        generatedPersonas >= progressState.totalPersonas ? "done" : generatedPersonas > 0 ? "active" : "",
+        `${generatedPersonas} / ${progressState.totalPersonas}`
+      );
+      setProgressStage("visual", visualDone ? "done" : generatedPersonas ? "active" : "", visualDone ? "готово" : "ожидает");
+      setProgressStage(
+        "simulation",
+        decisions >= progressState.totalDecisions ? "done" : decisions > 0 ? "active" : "",
+        `${decisions} / ${progressState.totalDecisions}`
+      );
+      setProgressStage(
+        "report",
+        runDone || reportDone ? "done" : reportStarted ? "active" : "",
+        runDone || reportDone ? "готово" : reportStarted ? "в процессе" : "ожидает"
+      );
+
+      const personaProgress = progressState.totalPersonas ? generatedPersonas / progressState.totalPersonas : 0;
+      const decisionProgress = progressState.totalDecisions ? decisions / progressState.totalDecisions : 0;
+      let percent = 15 + personaProgress * 25 + (visualDone ? 10 : 0) + decisionProgress * 40;
+      if (reportStarted) percent = Math.max(percent, 92);
+      if (reportDone || runDone) percent = 100;
+      updateProgressPercent(percent);
+
+      if (reportStarted) setProgressText("Собираем выводы и рекомендации.");
+      else if (decisions > 0) setProgressText("Персоны сравнивают варианты в двух порядках.");
+      else if (visualDone) setProgressText("Готовим парные сравнения для персон.");
+      else if (generatedPersonas > 0) setProgressText("Генерируем синтетические персоны.");
+    }
+
+    function finishProgress() {
+      if (!progressState) return;
+      progressState.active = false;
+      setProgressStage("setup", "done", "готово");
+      setProgressStage("upload", "done", "готово");
+      setProgressStage("personas", "done", `${progressState.totalPersonas} / ${progressState.totalPersonas}`);
+      setProgressStage("visual", "done", "готово");
+      setProgressStage("simulation", "done", `${progressState.totalDecisions} / ${progressState.totalDecisions}`);
+      setProgressStage("report", "done", "готово");
+      setProgressText("Отчет готов.");
+      updateProgressPercent(100);
+    }
+
+    function failProgress() {
+      if (!progressState) return;
+      progressState.active = false;
+      const progress = document.getElementById("runProgress");
+      const etaNode = document.getElementById("progressEta");
+      if (progress) progress.classList.add("failed");
+      if (etaNode) etaNode.textContent = "Остановлено из-за ошибки";
+      const activeStage = reportNode.querySelector(".run-stage.active") || reportNode.querySelector(".run-stage:not(.done)");
+      if (activeStage) {
+        activeStage.className = "run-stage failed";
+        activeStage.querySelector(".stage-count").textContent = "ошибка";
+      }
+    }
+
     async function refreshLogs() {
       try {
-        const payload = await fetch("/logs?limit=180").then(parseResponse);
-        logsNode.textContent = payload.lines && payload.lines.length
-          ? payload.lines.join("\\n")
+        const payload = await fetch("/logs?limit=1000").then(parseResponse);
+        const visibleLines = currentSessionLines(payload.lines || []);
+        logsNode.textContent = visibleLines.length
+          ? visibleLines.join("\\n")
           : "Лог пока пуст.";
+        updateProgressFromLogs(payload.lines || []);
       } catch (error) {
         logsNode.textContent = `Не удалось загрузить журнал: ${error.message || String(error)}`;
       }
@@ -756,11 +1070,15 @@ async def index() -> str:
     document.getElementById("run").addEventListener("click", async () => {
       const button = document.getElementById("run");
       button.disabled = true;
+      const totalPersonas = Number(document.getElementById("personas").value);
+      const baselineLines = await logSnapshot();
+      const baselineMarker = baselineLines.length ? baselineLines[baselineLines.length - 1] : "";
+      sessionLogMarker = baselineMarker;
+      logsNode.textContent = "Лог пока пуст.";
+      renderRunningProgress(totalPersonas, baselineMarker);
       startLogPolling();
       winnerNode.textContent = "Расчет...";
       subtitleNode.textContent = "Создаем эксперимент и опрашиваем синтетические персоны.";
-      reportNode.className = "empty";
-      reportNode.innerHTML = `<div class="empty-inner"><div class="empty-visual"></div><h2>Симуляция выполняется</h2><p>Генерируем персоны, сравниваем два варианта и собираем отчет.</p></div>`;
       setStatus("Запускаем эксперимент...");
       try {
         if (defaultFilesPromise) {
@@ -781,25 +1099,36 @@ async def index() -> str:
             target_audience: document.getElementById("audience").value
           })
         }).then(parseResponse);
+        progressState.experimentId = created.id;
+        setProgressStage("setup", "done", "готово");
+        setProgressStage("upload", "active", "в процессе");
+        setProgressText("Загружаем изображения и готовим запуск.");
+        updateProgressPercent(8);
 
         setStatus("Загружаем изображения...");
         const form = new FormData();
         form.append("control", controlFile);
         form.append("challenger", challengerFile);
         await fetch(`/experiments/${created.id}/upload`, { method: "POST", body: form }).then(parseResponse);
+        setProgressStage("upload", "done", "готово");
+        setProgressStage("personas", "active", `0 / ${totalPersonas}`);
+        setProgressText("Генерируем синтетические персоны.");
+        updateProgressPercent(15);
 
         setStatus("Персоны голосуют за варианты...");
         const report = await fetch(`/experiments/${created.id}/run`, {
           method: "POST",
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({
-            num_personas: Number(document.getElementById("personas").value),
+            num_personas: totalPersonas,
             batch_size: Number(document.getElementById("batch").value)
           })
         }).then(parseResponse);
+        finishProgress();
         renderReport(report);
         setStatus("Отчет готов.");
       } catch (error) {
+        failProgress();
         winnerNode.textContent = "Ошибка";
         subtitleNode.textContent = "Проверьте параметры эксперимента и файлы.";
         reportNode.className = "empty";
