@@ -40,7 +40,9 @@ app.include_router(experiments_router)
 
 
 @app.get("/logs")
-async def read_logs(limit: int = Query(default=180, ge=1, le=1000)) -> dict[str, object]:
+async def read_logs(
+    limit: int = Query(default=180, ge=1, le=1000)
+) -> dict[str, object]:
     log_file = get_settings().log_file
     if not log_file.exists():
         return {"path": str(log_file), "lines": []}
@@ -58,7 +60,9 @@ async def _run_sqlite_migrations(connection) -> None:
 
     def migrate(sync_connection) -> None:
         def columns(table_name: str) -> set[str]:
-            rows = sync_connection.exec_driver_sql(f"PRAGMA table_info({table_name})").fetchall()
+            rows = sync_connection.exec_driver_sql(
+                f"PRAGMA table_info({table_name})"
+            ).fetchall()
             return {row[1] for row in rows}
 
         simulation_columns = columns("simulation_results")
@@ -106,6 +110,9 @@ async def _run_sqlite_migrations(connection) -> None:
             "stable_personas": "INTEGER NOT NULL DEFAULT 0",
             "unstable_personas": "INTEGER NOT NULL DEFAULT 0",
             "unstable_rate": "FLOAT NOT NULL DEFAULT 0.0",
+            "text_findings": "TEXT NOT NULL DEFAULT '[]'",
+            "visual_findings": "TEXT NOT NULL DEFAULT '[]'",
+            "combined_conclusion": "TEXT NOT NULL DEFAULT ''",
         }
         for column_name, column_type in report_additions.items():
             if column_name not in report_columns:
@@ -583,6 +590,11 @@ async def index() -> str:
       return `<ul>${items.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
     }
 
+    function renderConclusionText(value, emptyText) {
+      const text = String(value || "").trim();
+      return text ? `<p>${escapeHtml(text)}</p>` : `<p>${emptyText}</p>`;
+    }
+
     async function refreshLogs() {
       try {
         const payload = await fetch("/logs?limit=180").then(parseResponse);
@@ -682,6 +694,22 @@ async def index() -> str:
             <div class="bar-row"><strong>Нет выбора</strong><div class="track"><div class="fill none" style="--w:${nonePct}%"></div></div><span>${nonePct}%</span></div>
             <p class="viz-summary">Исключено нестабильных персон: <strong>${report.unstable_personas || 0} из ${personaTotal}</strong></p>
           </div>
+        </div>
+
+        <div class="split">
+          <div class="block">
+            <h3>Выводы по тексту</h3>
+            ${renderList(report.text_findings, "Отдельных выводов по содержанию нет.")}
+          </div>
+          <div class="block">
+            <h3>Выводы по визуалу</h3>
+            ${renderList(report.visual_findings, "Отдельных выводов по визуалу нет.")}
+          </div>
+        </div>
+
+        <div class="block">
+          <h3>Совместный вывод</h3>
+          ${renderConclusionText(report.combined_conclusion, "Совместный вывод не сформирован.")}
         </div>
 
         <div class="split">

@@ -6,7 +6,14 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.llm.base import LLMClient
-from app.models import Experiment, ExperimentReport, MappedVerdict, PresentedOrder, SimulationResult, VisualQuality
+from app.models import (
+    Experiment,
+    ExperimentReport,
+    MappedVerdict,
+    PresentedOrder,
+    SimulationResult,
+    VisualQuality,
+)
 from app.services.prompt_renderer import PromptRenderer
 
 logger = logging.getLogger(__name__)
@@ -72,6 +79,15 @@ class ReportGenerator:
         }
         prompt = self.prompt_renderer.render("report_summary.md", context)
         summary = await self.llm_client.summarize_report(prompt, context)
+        final_sections = await self._final_sections(
+            summary=summary,
+            top_control=top_control,
+            top_challenger=top_challenger,
+            top_none=top_none,
+            visual_stats=visual_stats,
+            aggregation=aggregation,
+            experiment=experiment,
+        )
 
         report = ExperimentReport(
             experiment_id=experiment.id,
@@ -98,6 +114,9 @@ class ReportGenerator:
             limitations=summary.get(
                 "limitations", "Синтетическая оценка не заменяет реальный A/B-тест."
             ),
+            text_findings=json.dumps(final_sections["text_findings"]),
+            visual_findings=json.dumps(final_sections["visual_findings"]),
+            combined_conclusion=final_sections["combined_conclusion"],
         )
         report = await session.merge(report)
         await session.flush()
@@ -109,20 +128,117 @@ class ReportGenerator:
         )
         return report
 
+    async def _final_sections(
+        self,
+        summary: dict[str, Any],
+        top_control: list[str],
+        top_challenger: list[str],
+        top_none: list[str],
+        visual_stats: dict[str, float],
+        aggregation: dict[str, Any],
+        experiment: Experiment,
+    ) -> dict[str, Any]:
+        recommendations = summary.get("recommendations", [])
+        limitations = summary.get(
+            "limitations", "Синтетическая оценка не заменяет реальный A/B-тест."
+        )
+        combined_report = {
+            "experiment": {
+                "name": experiment.name,
+                "conversion_goal": experiment.conversion_goal,
+                "target_audience": experiment.target_audience,
+            },
+            "winner": aggregation["winner"],
+            "confidence_score": aggregation["confidence_score"],
+            "votes": {
+                "control": aggregation["control_votes"],
+                "challenger": aggregation["challenger_votes"],
+                "none": aggregation["none_votes"],
+            },
+            "stable_personas": aggregation["stable_personas"],
+            "unstable_personas": aggregation["unstable_personas"],
+            "unstable_rate": aggregation["unstable_rate"],
+            "top_reasons": {
+                "control": top_control,
+                "challenger": top_challenger,
+                "none": top_none,
+            },
+            "visual_stats": visual_stats,
+            "recommendations": recommendations,
+            "limitations": limitations,
+        }
+        context = {
+            "combined_report": json.dumps(
+                combined_report, ensure_ascii=False, indent=2
+            ),
+        }
+        prompt = self.prompt_renderer.render("final_report_sections.md", context)
+        try:
+            payload = await self.llm_client.summarize_report(prompt, context)
+        except Exception:
+            logger.exception(
+                "Final report section generation failed experiment_id=%s", experiment.id
+            )
+            payload = {}
+
+        return {
+            "text_findings": self._short_list(payload.get("text_findings")),
+            "visual_findings": self._short_list(payload.get("visual_findings")),
+            "combined_conclusion": self._combined_conclusion(
+                payload, recommendations, limitations
+            ),
+        }
+
     @staticmethod
-    def _stable_decisions(results: list[SimulationResult]) -> dict[int, MappedVerdict | None]:
+    def _short_list(value: Any) -> list[str]:
+        if not isinstance(value, list):
+            return []
+        findings: list[str] = []
+        for item in value:
+            text = str(item).strip()
+            if text and text not in findings:
+                findings.append(text)
+            if len(findings) == 3:
+                break
+        return findings
+
+    @staticmethod
+    def _combined_conclusion(
+        payload: dict[str, Any],
+        recommendations: list[str],
+        limitations: str,
+    ) -> str:
+        conclusion = str(payload.get("combined_conclusion") or "").strip()
+        if conclusion:
+            return conclusion
+        recommendation_text = " ".join(
+            str(item).strip() for item in recommendations if str(item).strip()
+        )
+        return recommendation_text or limitations
+
+    @staticmethod
+    def _stable_decisions(
+        results: list[SimulationResult],
+    ) -> dict[int, MappedVerdict | None]:
         by_persona: dict[int, dict[PresentedOrder, MappedVerdict]] = defaultdict(dict)
         for result in results:
-            by_persona[result.persona_id][result.presented_order] = result.mapped_verdict
+            by_persona[result.persona_id][
+                result.presented_order
+            ] = result.mapped_verdict
 
         decisions: dict[int, MappedVerdict | None] = {}
         for persona_id, orders in by_persona.items():
-            if PresentedOrder.control_first not in orders or PresentedOrder.challenger_first not in orders:
+            if (
+                PresentedOrder.control_first not in orders
+                or PresentedOrder.challenger_first not in orders
+            ):
                 decisions[persona_id] = None
                 continue
             control_first = orders[PresentedOrder.control_first]
             challenger_first = orders[PresentedOrder.challenger_first]
-            decisions[persona_id] = control_first if control_first == challenger_first else None
+            decisions[persona_id] = (
+                control_first if control_first == challenger_first else None
+            )
         return decisions
 
     @staticmethod
@@ -188,8 +304,12 @@ class ReportGenerator:
                 "challenger_visual_fail_rate": 0.0,
             }
 
-        image_1_fails = sum(result.visual_quality_image_1 == VisualQuality.fail for result in results)
-        image_2_fails = sum(result.visual_quality_image_2 == VisualQuality.fail for result in results)
+        image_1_fails = sum(
+            result.visual_quality_image_1 == VisualQuality.fail for result in results
+        )
+        image_2_fails = sum(
+            result.visual_quality_image_2 == VisualQuality.fail for result in results
+        )
         control_fails = 0
         challenger_fails = 0
 

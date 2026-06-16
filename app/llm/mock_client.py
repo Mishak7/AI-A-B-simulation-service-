@@ -17,9 +17,20 @@ class MockLLMClient(LLMClient):
         "Freelance designer",
         "Customer support manager",
     ]
-    locations = ["New York", "Austin", "Berlin", "London", "Toronto", "Warsaw", "Madrid", "Amsterdam"]
+    locations = [
+        "New York",
+        "Austin",
+        "Berlin",
+        "London",
+        "Toronto",
+        "Warsaw",
+        "Madrid",
+        "Amsterdam",
+    ]
 
-    async def generate_personas(self, prompt: str, num_personas: int) -> list[PersonaProfile]:
+    async def generate_personas(
+        self, prompt: str, num_personas: int
+    ) -> list[PersonaProfile]:
         personas: list[PersonaProfile] = []
         offset = prompt.count("Synthetic Persona")
         for index in range(num_personas):
@@ -30,12 +41,19 @@ class MockLLMClient(LLMClient):
             personas.append(
                 PersonaProfile(
                     name=f"Synthetic Persona {absolute_index + 1}",
-                    age_range=["18-24", "25-34", "35-44", "45-54", "55+"][absolute_index % 5],
+                    age_range=["18-24", "25-34", "35-44", "45-54", "55+"][
+                        absolute_index % 5
+                    ],
                     occupation=occupation,
-                    income_level=["low", "middle", "upper-middle", "high"][absolute_index % 4],
-                    education=["High school", "Bachelor's", "Master's", "Professional training"][
+                    income_level=["low", "middle", "upper-middle", "high"][
                         absolute_index % 4
                     ],
+                    education=[
+                        "High school",
+                        "Bachelor's",
+                        "Master's",
+                        "Professional training",
+                    ][absolute_index % 4],
                     location=location,
                     interests=f"Convenience, trust signals, clear pricing, and {occupation.lower()} workflows",
                     goals="Complete the task quickly with low uncertainty.",
@@ -43,18 +61,30 @@ class MockLLMClient(LLMClient):
                     technical_savviness=savviness,
                     financial_literacy=["low", "medium", "high"][absolute_index % 3],
                     digital_literacy=["low", "medium", "high"][absolute_index % 3],
-                    trust_in_online_banking=["low", "medium", "high"][(absolute_index + 1) % 3],
+                    trust_in_online_banking=["low", "medium", "high"][
+                        (absolute_index + 1) % 3
+                    ],
                     fraud_anxiety=["low", "medium", "high"][(absolute_index + 2) % 3],
                     fee_sensitivity=["low", "medium", "high"][(absolute_index + 1) % 3],
-                    privacy_sensitivity=["low", "medium", "high"][(absolute_index + 2) % 3],
-                    banking_channel_preference=["mobile-first", "web", "branch support"][
+                    privacy_sensitivity=["low", "medium", "high"][
+                        (absolute_index + 2) % 3
+                    ],
+                    banking_channel_preference=[
+                        "mobile-first",
+                        "web",
+                        "branch support",
+                    ][absolute_index % 3],
+                    decision_style=[
+                        "quick scanner",
+                        "careful comparer",
+                        "advice-seeking",
+                    ][absolute_index % 3],
+                    region_type=["large city", "small city", "rural area"][
                         absolute_index % 3
                     ],
-                    decision_style=["quick scanner", "careful comparer", "advice-seeking"][
+                    income_stability=["unstable", "moderate", "stable"][
                         absolute_index % 3
                     ],
-                    region_type=["large city", "small city", "rural area"][absolute_index % 3],
-                    income_stability=["unstable", "moderate", "stable"][absolute_index % 3],
                     online_behavior="Compares options, scans headings, and looks for proof before acting.",
                     browsing_context="Short focused session on desktop or mobile during a busy day.",
                     task_context="Evaluating which interface better supports the stated conversion goal.",
@@ -89,19 +119,37 @@ class MockLLMClient(LLMClient):
             rationale=rationale,
         )
 
-    async def assess_visual_quality(self, prompt: str, image_path: str, image_label: str) -> VisualAssessment:
+    async def assess_visual_quality(
+        self, prompt: str, image_path: str, image_label: str
+    ) -> VisualAssessment:
         return VisualAssessment(
             visual_quality="pass",
             visual_issues=f"Для изображения {image_label} mock-клиент не обнаружил серьезных визуальных проблем.",
         )
 
-    async def summarize_report(self, prompt: str, context: dict[str, Any]) -> dict[str, Any]:
+    async def summarize_report(
+        self, prompt: str, context: dict[str, Any]
+    ) -> dict[str, Any]:
+        if "combined_report" in context:
+            return {
+                "text_findings": [
+                    "Оффер должен быть яснее.",
+                    "CTA требует быстрой проверки.",
+                ],
+                "visual_findings": [],
+                "combined_conclusion": (
+                    "Совместный вывод указывает направление для проверки на реальных "
+                    "пользователях без замены полноценного A/B-теста."
+                ),
+            }
         winner = context.get("winner", "inconclusive")
         return {
             "recommendations": [
-                f"Используйте направление {winner} как гипотезу для проверки на реальных пользователях."
-                if winner != "inconclusive"
-                else "Считайте результат только направлением для размышления и проверьте более явное различие вариантов.",
+                (
+                    f"Используйте направление {winner} как гипотезу для проверки на реальных пользователях."
+                    if winner != "inconclusive"
+                    else "Считайте результат только направлением для размышления и проверьте более явное различие вариантов."
+                ),
                 "Перед изменением продакшен-интерфейса изучите самые частые причины выбора.",
                 "Перед финальным решением запустите реальный A/B-тест на продуктовой аудитории.",
             ],

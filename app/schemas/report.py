@@ -27,6 +27,9 @@ class ExperimentReportRead(BaseModel):
     top_none_reasons: list[str]
     recommendations: list[str]
     limitations: str
+    text_findings: list[str] = []
+    visual_findings: list[str] = []
+    combined_conclusion: str = ""
     agent_results: list[SimulationResultRead] = []
 
     model_config = ConfigDict(from_attributes=True)

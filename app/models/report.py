@@ -7,7 +7,9 @@ from app.db.base import Base
 class ExperimentReport(Base):
     __tablename__ = "experiment_reports"
 
-    experiment_id: Mapped[int] = mapped_column(ForeignKey("experiments.id"), primary_key=True)
+    experiment_id: Mapped[int] = mapped_column(
+        ForeignKey("experiments.id"), primary_key=True
+    )
     control_votes: Mapped[int] = mapped_column(Integer)
     challenger_votes: Mapped[int] = mapped_column(Integer)
     none_votes: Mapped[int] = mapped_column(Integer)
@@ -29,5 +31,8 @@ class ExperimentReport(Base):
     top_none_reasons: Mapped[str] = mapped_column(Text)
     recommendations: Mapped[str] = mapped_column(Text)
     limitations: Mapped[str] = mapped_column(Text)
+    text_findings: Mapped[str] = mapped_column(Text, default="[]")
+    visual_findings: Mapped[str] = mapped_column(Text, default="[]")
+    combined_conclusion: Mapped[str] = mapped_column(Text, default="")
 
     experiment = relationship("Experiment", back_populates="report")

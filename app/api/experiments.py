@@ -12,7 +12,13 @@ from sqlalchemy.orm import selectinload
 from app.config import get_settings
 from app.db.session import get_session
 from app.llm.factory import get_llm_client
-from app.models import Experiment, ExperimentReport, ExperimentStatus, Persona, SimulationResult
+from app.models import (
+    Experiment,
+    ExperimentReport,
+    ExperimentStatus,
+    Persona,
+    SimulationResult,
+)
 from app.schemas import (
     ExperimentCreate,
     ExperimentRead,
@@ -66,8 +72,12 @@ async def upload_images(
 
     experiment_dir = get_settings().storage_dir / str(experiment.id)
     experiment_dir.mkdir(parents=True, exist_ok=True)
-    control_path = _save_upload(control, experiment_dir / f"control{_suffix(control.filename)}")
-    challenger_path = _save_upload(challenger, experiment_dir / f"challenger{_suffix(challenger.filename)}")
+    control_path = _save_upload(
+        control, experiment_dir / f"control{_suffix(control.filename)}"
+    )
+    challenger_path = _save_upload(
+        challenger, experiment_dir / f"challenger{_suffix(challenger.filename)}"
+    )
 
     experiment.control_image_path = str(control_path)
     experiment.challenger_image_path = str(challenger_path)
@@ -92,7 +102,9 @@ async def run_experiment(
     if not experiment.conversion_goal:
         raise HTTPException(status_code=400, detail="conversion_goal is required")
     if not experiment.control_image_path or not experiment.challenger_image_path:
-        raise HTTPException(status_code=400, detail="Both control and challenger images are required")
+        raise HTTPException(
+            status_code=400, detail="Both control and challenger images are required"
+        )
 
     logger.info(
         "Run requested experiment_id=%s num_personas=%s batch_size=%s",
@@ -101,8 +113,12 @@ async def run_experiment(
         payload.batch_size,
     )
     experiment.status = ExperimentStatus.running
-    await session.execute(delete(SimulationResult).where(SimulationResult.experiment_id == experiment_id))
-    await session.execute(delete(ExperimentReport).where(ExperimentReport.experiment_id == experiment_id))
+    await session.execute(
+        delete(SimulationResult).where(SimulationResult.experiment_id == experiment_id)
+    )
+    await session.execute(
+        delete(ExperimentReport).where(ExperimentReport.experiment_id == experiment_id)
+    )
     await session.execute(delete(Persona).where(Persona.experiment_id == experiment_id))
     await session.commit()
 
@@ -115,14 +131,20 @@ async def run_experiment(
             num_personas=payload.num_personas,
             batch_size=min(payload.batch_size, 10),
         )
-        logger.info("Personas ready experiment_id=%s count=%s", experiment_id, len(personas))
+        logger.info(
+            "Personas ready experiment_id=%s count=%s", experiment_id, len(personas)
+        )
         results = await SimulationRunner(llm_client, prompt_renderer).run(
             session=session,
             experiment=experiment,
             personas=personas,
             concurrency=payload.batch_size,
         )
-        logger.info("Simulations ready experiment_id=%s result_count=%s", experiment_id, len(results))
+        logger.info(
+            "Simulations ready experiment_id=%s result_count=%s",
+            experiment_id,
+            len(results),
+        )
         aggregation = Aggregator().aggregate(results)
         logger.info(
             "Aggregation ready experiment_id=%s winner=%s control=%s challenger=%s none=%s stable=%s unstable=%s",
@@ -144,7 +166,11 @@ async def run_experiment(
         experiment.completed_at = datetime.now(UTC)
         await session.commit()
         await session.refresh(report)
-        logger.info("Run completed experiment_id=%s report_experiment_id=%s", experiment_id, report.experiment_id)
+        logger.info(
+            "Run completed experiment_id=%s report_experiment_id=%s",
+            experiment_id,
+            report.experiment_id,
+        )
         return _report_to_schema(report, results)
     except Exception:
         logger.exception("Run failed experiment_id=%s", experiment_id)
@@ -184,7 +210,10 @@ async def _get_experiment(session: AsyncSession, experiment_id: int) -> Experime
     result = await session.execute(
         select(Experiment)
         .where(Experiment.id == experiment_id)
-        .options(selectinload(Experiment.personas), selectinload(Experiment.simulation_results))
+        .options(
+            selectinload(Experiment.personas),
+            selectinload(Experiment.simulation_results),
+        )
     )
     experiment = result.scalar_one_or_none()
     if experiment is None:
@@ -235,7 +264,12 @@ def _report_to_schema(
         top_none_reasons=json.loads(report.top_none_reasons),
         recommendations=json.loads(report.recommendations),
         limitations=report.limitations,
-        agent_results=[_simulation_result_to_schema(result) for result in results or []],
+        text_findings=json.loads(report.text_findings),
+        visual_findings=json.loads(report.visual_findings),
+        combined_conclusion=report.combined_conclusion,
+        agent_results=[
+            _simulation_result_to_schema(result) for result in results or []
+        ],
     )
 
 

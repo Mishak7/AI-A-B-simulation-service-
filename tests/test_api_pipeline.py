@@ -9,7 +9,9 @@ PNG_1X1 = (
 
 
 def test_mock_pipeline_end_to_end(tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("SAB_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path / 'test.db'}")
+    monkeypatch.setenv(
+        "SAB_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path / 'test.db'}"
+    )
     monkeypatch.setenv("SAB_STORAGE_DIR", str(tmp_path / "storage"))
     monkeypatch.setenv("SAB_LOG_FILE", str(tmp_path / "simab.log"))
     monkeypatch.setenv("SAB_LLM_PROVIDER", "mock")
@@ -46,7 +48,9 @@ def test_mock_pipeline_end_to_end(tmp_path, monkeypatch) -> None:
         assert report.status_code == 200
         payload = report.json()
         assert (
-            payload["control_votes"] + payload["challenger_votes"] + payload["none_votes"]
+            payload["control_votes"]
+            + payload["challenger_votes"]
+            + payload["none_votes"]
             == payload["stable_personas"]
         )
         assert payload["stable_personas"] + payload["unstable_personas"] == 6
@@ -59,6 +63,9 @@ def test_mock_pipeline_end_to_end(tmp_path, monkeypatch) -> None:
         assert payload["image_2_visual_fail_rate"] == 0.0
         assert payload["control_visual_fail_rate"] == 0.0
         assert payload["challenger_visual_fail_rate"] == 0.0
+        assert payload["text_findings"]
+        assert isinstance(payload["visual_findings"], list)
+        assert payload["combined_conclusion"]
         assert len(payload["agent_results"]) == 12
         assert {
             "raw_verdict",
@@ -68,9 +75,10 @@ def test_mock_pipeline_end_to_end(tmp_path, monkeypatch) -> None:
             "critical_visual_defect",
             "normalized_rationale",
         }.issubset(payload["agent_results"][0])
-        assert {
-            result["presented_order"] for result in payload["agent_results"]
-        } == {"control_first", "challenger_first"}
+        assert {result["presented_order"] for result in payload["agent_results"]} == {
+            "control_first",
+            "challenger_first",
+        }
         assert "Синтетическая оценка не заменяет" in payload["limitations"]
 
         status = client.get(f"/experiments/{experiment_id}")
@@ -89,7 +97,10 @@ def test_mock_pipeline_end_to_end(tmp_path, monkeypatch) -> None:
             + rerun_payload["none_votes"]
             == rerun_payload["stable_personas"]
         )
-        assert rerun_payload["stable_personas"] + rerun_payload["unstable_personas"] == 3
+        assert (
+            rerun_payload["stable_personas"] + rerun_payload["unstable_personas"] == 3
+        )
+        assert rerun_payload["combined_conclusion"]
         assert len(rerun_payload["agent_results"]) == 6
 
         logs = client.get("/logs?limit=50")
