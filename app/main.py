@@ -202,6 +202,11 @@ async def index() -> str:
     input:focus, textarea:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(18, 161, 84, 0.13); }
     textarea { min-height: 92px; resize: vertical; }
     .row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .upload-row label {
+      display: grid;
+      grid-template-rows: 18px auto;
+      align-items: start;
+    }
     .upload {
       position: relative;
       overflow: hidden;
@@ -544,30 +549,30 @@ async def index() -> str:
       <section class="panel">
         <h2>Настройка эксперимента</h2>
         <label>Название
-          <input id="name" value="Меню кредитов Сбера: влияние входа в ГигаЧат" />
+          <input id="name" value="Consumer Loan Calculator Default Values" />
         </label>
         <label>Цель эксперимента
-          <textarea id="goal">Повысить CTR по основному CTA «Оформить кредит онлайн» на экране меню кредитов, то есть увеличить долю пользователей, которые после просмотра меню переходят к началу онлайн-оформления кредита.</textarea>
+          <textarea id="goal">Повысить вероятность перехода к следующему шагу оформления потребительского кредита («Продолжить») после просмотра кредитного калькулятора за счет более привлекательных значений суммы и срока кредита по умолчанию.</textarea>
         </label>
         <label>Целевая аудитория
-          <textarea id="audience">Российские розничные пользователи банковских сервисов, которые открыли раздел кредитов Сбера на десктопе. Аудитория включает действующих и потенциальных клиентов Сбера с разным уровнем финансовой грамотности, цифровой грамотности, доверия к онлайн-банкингу и готовности взять кредит. Часть пользователей активно ищет кредит, рефинансирование, рассрочку или информацию по условиям, а часть просто изучает варианты и пытается понять, подходит ли им продукт.</textarea>
+          <textarea id="audience">Российские розничные клиенты, рассматривающие оформление потребительского кредита онлайн. Пользователи находятся на этапе первичного изучения условий кредита и оценивают доступность ежемесячного платежа, размер кредита и срок погашения перед началом оформления заявки.</textarea>
         </label>
-        <div class="row">
-          <label>Базовый вариант без ГигаЧата
+        <div class="row upload-row">
+          <label>Контроль
             <div class="upload has-image" id="controlDrop">
-              <img id="controlPreview" src="/static/sber_credits_without_gigachat.png" alt="" />
+              <img id="controlPreview" src="/static/consumer_loan_300k_5y.png" alt="" />
               <div class="upload-content">
-                <span class="upload-title" id="controlName">Базовый вариант: без ГигаЧата</span>
+                <span class="upload-title" id="controlName">Контроль: 300 000 ₽, 5 лет</span>
                 <span>Можно заменить своим PNG или JPG</span>
               </div>
               <input id="control" type="file" accept="image/*" />
             </div>
           </label>
-          <label>Тестовый вариант с ГигаЧатом
+          <label>Тестовый вариант
             <div class="upload has-image" id="challengerDrop">
-              <img id="challengerPreview" src="/static/sber_credits_with_gigachat.png" alt="" />
+              <img id="challengerPreview" src="/static/consumer_loan_100k_3y.png" alt="" />
               <div class="upload-content">
-                <span class="upload-title" id="challengerName">Тестовый вариант: с ГигаЧатом</span>
+                <span class="upload-title" id="challengerName">Тест: 100 000 ₽, 3 года</span>
                 <span>Можно заменить своим PNG или JPG</span>
               </div>
               <input id="challenger" type="file" accept="image/*" />
@@ -584,7 +589,7 @@ async def index() -> str:
         </div>
         <div class="actions">
           <button id="run">Запустить симуляцию</button>
-          <div class="status" id="status">Загружен пример: меню кредитов Сбера без ГигаЧата против версии с ГигаЧатом.</div>
+          <div class="status" id="status">Загружен пример: кредитный калькулятор с разными значениями суммы и срока по умолчанию.</div>
         </div>
       </section>
 
@@ -600,7 +605,7 @@ async def index() -> str:
           <div class="empty-inner">
             <div class="empty-visual"></div>
             <h2>Готов пример для запуска</h2>
-            <p>По умолчанию сравниваются меню кредитов Сбера без ГигаЧата и тестовый вариант с входом в ГигаЧат. Скриншоты можно заменить своими.</p>
+            <p>По умолчанию сравниваются значения кредитного калькулятора: контроль 300 000 ₽ на 5 лет и тест 100 000 ₽ на 3 года. Скриншоты можно заменить своими.</p>
           </div>
         </div>
       </section>
@@ -1058,8 +1063,8 @@ async def index() -> str:
     document.getElementById("refreshLogs").addEventListener("click", refreshLogs);
 
     defaultFilesPromise = Promise.all([
-      loadDefaultFile("/static/sber_credits_without_gigachat.png", "sber_credits_without_gigachat.png"),
-      loadDefaultFile("/static/sber_credits_with_gigachat.png", "sber_credits_with_gigachat.png")
+      loadDefaultFile("/static/consumer_loan_300k_5y.png", "consumer_loan_300k_5y.png"),
+      loadDefaultFile("/static/consumer_loan_100k_3y.png", "consumer_loan_100k_3y.png")
     ])
       .then(([controlFile, challengerFile]) => {
         defaultControlFile = controlFile;
