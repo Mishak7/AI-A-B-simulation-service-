@@ -97,6 +97,16 @@ async def _run_sqlite_migrations(connection) -> None:
                     f"ALTER TABLE personas ADD COLUMN {column_name} {column_type}"
                 )
 
+        experiment_columns = columns("experiments")
+        experiment_additions = {
+            "mode": "VARCHAR(32) NOT NULL DEFAULT 'ab_test'",
+        }
+        for column_name, column_type in experiment_additions.items():
+            if column_name not in experiment_columns:
+                sync_connection.exec_driver_sql(
+                    f"ALTER TABLE experiments ADD COLUMN {column_name} {column_type}"
+                )
+
         report_columns = columns("experiment_reports")
         report_additions = {
             "image_1_visual_fail_rate": "FLOAT NOT NULL DEFAULT 0.0",
@@ -186,6 +196,65 @@ async def index() -> str:
     }
     .panel { padding: 20px; }
     label { display: block; font-size: 13px; font-weight: 560; margin: 14px 0 0; color: #26352f; }
+    .mode-switch {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .mode-option {
+      display: block;
+      margin: 0;
+      min-height: 92px;
+      padding: 13px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfdfc;
+      cursor: pointer;
+    }
+    .mode-option input {
+      position: absolute;
+      inline-size: 1px;
+      block-size: 1px;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .mode-title {
+      display: block;
+      margin-bottom: 6px;
+      color: #24352f;
+      font-size: 13px;
+      font-weight: 650;
+      overflow-wrap: anywhere;
+    }
+    .mode-copy {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+      font-weight: 400;
+      overflow-wrap: anywhere;
+    }
+    .experiment-form {
+      display: none;
+    }
+    .experiment-form.is-visible {
+      display: block;
+    }
+    .mode-option:has(input:checked) {
+      border-color: var(--green);
+      background: #edf8f2;
+      box-shadow: 0 0 0 3px rgba(18, 161, 84, 0.1);
+    }
+    .field-hint {
+      display: none;
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 400;
+      line-height: 1.35;
+    }
+    body.variant-generation .field-hint { display: block; }
     input, textarea {
       width: 100%;
       margin-top: 7px;
@@ -202,6 +271,8 @@ async def index() -> str:
     input:focus, textarea:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(18, 161, 84, 0.13); }
     textarea { min-height: 92px; resize: vertical; }
     .row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .upload-row.single { grid-template-columns: 1fr; }
+    body.variant-generation .challenger-upload { display: none; }
     .upload-row label {
       display: grid;
       grid-template-rows: 18px auto;
@@ -243,7 +314,9 @@ async def index() -> str:
       font: inherit;
       font-weight: 650;
       cursor: pointer;
-      white-space: nowrap;
+      white-space: normal;
+      line-height: 1.2;
+      overflow-wrap: anywhere;
     }
     button:hover { background: var(--green-dark); }
     button:disabled { opacity: 0.62; cursor: wait; }
@@ -527,6 +600,7 @@ async def index() -> str:
     }
     @media (max-width: 640px) {
       main { padding: 18px 12px 28px; }
+      .mode-switch { grid-template-columns: 1fr; }
       .row, .metrics { grid-template-columns: 1fr; }
       .actions { align-items: stretch; flex-direction: column; }
       button { width: 100%; }
@@ -548,48 +622,64 @@ async def index() -> str:
     <div class="layout">
       <section class="panel">
         <h2>Настройка эксперимента</h2>
-        <label>Название
-          <input id="name" value="Consumer Loan Calculator Default Values" />
-        </label>
-        <label>Цель эксперимента
-          <textarea id="goal">Повысить вероятность перехода к следующему шагу оформления потребительского кредита («Продолжить») после просмотра кредитного калькулятора за счет более привлекательных значений суммы и срока кредита по умолчанию.</textarea>
-        </label>
-        <label>Целевая аудитория
-          <textarea id="audience">Российские розничные клиенты, рассматривающие оформление потребительского кредита онлайн. Пользователи находятся на этапе первичного изучения условий кредита и оценивают доступность ежемесячного платежа, размер кредита и срок погашения перед началом оформления заявки.</textarea>
-        </label>
-        <div class="row upload-row">
-          <label>Контроль
-            <div class="upload has-image" id="controlDrop">
-              <img id="controlPreview" src="/static/consumer_loan_300k_5y.png" alt="" />
-              <div class="upload-content">
-                <span class="upload-title" id="controlName">Контроль: 300 000 ₽, 5 лет</span>
-                <span>Можно заменить своим PNG или JPG</span>
-              </div>
-              <input id="control" type="file" accept="image/*" />
-            </div>
+        <div class="mode-switch" role="radiogroup" aria-label="Режим эксперимента">
+          <label class="mode-option">
+            <input type="radio" name="experimentMode" value="ab_test" />
+            <span class="mode-title">Проверить готовый A/B-тест</span>
+            <span class="mode-copy">Есть контрольный и тестовый макет.</span>
           </label>
-          <label>Тестовый вариант
-            <div class="upload has-image" id="challengerDrop">
-              <img id="challengerPreview" src="/static/consumer_loan_100k_3y.png" alt="" />
-              <div class="upload-content">
-                <span class="upload-title" id="challengerName">Тест: 100 000 ₽, 3 года</span>
-                <span>Можно заменить своим PNG или JPG</span>
-              </div>
-              <input id="challenger" type="file" accept="image/*" />
-            </div>
+          <label class="mode-option">
+            <input type="radio" name="experimentMode" value="variant_generation" />
+            <span class="mode-title">Сгенерировать гипотезы и вариант</span>
+            <span class="mode-copy">Есть только контрольный макет.</span>
           </label>
         </div>
-        <div class="row">
-          <label>Количество персон
-            <input id="personas" type="number" min="1" max="500" value="24" />
+        <div class="experiment-form" id="experimentForm">
+          <label>Название
+            <input id="name" value="Consumer Loan Calculator Default Values" />
           </label>
-          <label>Размер батча
-            <input id="batch" type="number" min="1" max="50" value="10" />
+          <label>Цель эксперимента
+            <textarea id="goal">Повысить вероятность перехода к следующему шагу оформления потребительского кредита («Продолжить») после просмотра кредитного калькулятора за счет более привлекательных значений суммы и срока кредита по умолчанию.</textarea>
+            <span class="field-hint">Можно оставить пустым: OpenClaw сможет сформулировать гипотезы от контрольного макета.</span>
           </label>
-        </div>
-        <div class="actions">
-          <button id="run">Запустить симуляцию</button>
-          <div class="status" id="status">Загружен пример: кредитный калькулятор с разными значениями суммы и срока по умолчанию.</div>
+          <label>Целевая аудитория
+            <textarea id="audience">Российские розничные клиенты, рассматривающие оформление потребительского кредита онлайн. Пользователи находятся на этапе первичного изучения условий кредита и оценивают доступность ежемесячного платежа, размер кредита и срок погашения перед началом оформления заявки.</textarea>
+            <span class="field-hint">Можно оставить пустым, если аудиторию нужно вывести из контекста интерфейса.</span>
+          </label>
+          <div class="row upload-row" id="uploadRow">
+            <label>Контроль
+              <div class="upload has-image" id="controlDrop">
+                <img id="controlPreview" src="/static/consumer_loan_300k_5y.png" alt="" />
+                <div class="upload-content">
+                  <span class="upload-title" id="controlName">Контроль: 300 000 ₽, 5 лет</span>
+                  <span>Можно заменить своим PNG или JPG</span>
+                </div>
+                <input id="control" type="file" accept="image/*" />
+              </div>
+            </label>
+            <label class="challenger-upload">Тестовый вариант
+              <div class="upload has-image" id="challengerDrop">
+                <img id="challengerPreview" src="/static/consumer_loan_100k_3y.png" alt="" />
+                <div class="upload-content">
+                  <span class="upload-title" id="challengerName">Тест: 100 000 ₽, 3 года</span>
+                  <span>Можно заменить своим PNG или JPG</span>
+                </div>
+                <input id="challenger" type="file" accept="image/*" />
+              </div>
+            </label>
+          </div>
+          <div class="row">
+            <label>Количество персон
+              <input id="personas" type="number" min="1" max="500" value="24" />
+            </label>
+            <label>Размер батча
+              <input id="batch" type="number" min="1" max="50" value="10" />
+            </label>
+          </div>
+          <div class="actions">
+            <button id="run">Запустить симуляцию</button>
+            <div class="status" id="status">Выберите режим эксперимента.</div>
+          </div>
         </div>
       </section>
 
@@ -747,18 +837,51 @@ async def index() -> str:
           line.includes("Initialized RealLLMClient") ||
           line.includes("Calling real LLM") ||
           line.includes("Calling real VLM") ||
-          line.includes("LLM request failed")
+          line.includes("LLM request failed") ||
+          line.includes("OpenClaw variant generation")
         );
       });
     }
 
-    function renderRunningProgress(totalPersonas, baselineMarker) {
+    function currentMode() {
+      return document.querySelector('input[name="experimentMode"]:checked')?.value || null;
+    }
+
+    function isVariantGenerationMode() {
+      return currentMode() === "variant_generation";
+    }
+
+    function syncModeUi() {
+      const mode = currentMode();
+      const hasMode = Boolean(mode);
+      const generationMode = isVariantGenerationMode();
+      document.getElementById("experimentForm").classList.toggle("is-visible", hasMode);
+      document.body.classList.toggle("variant-generation", generationMode);
+      document.getElementById("uploadRow").classList.toggle("single", generationMode);
+      document.getElementById("run").textContent = generationMode
+        ? "Сгенерировать гипотезы"
+        : "Запустить симуляцию";
+      if (!hasMode) {
+        setStatus("Выберите режим эксперимента.");
+        subtitleNode.textContent = "Выберите сценарий слева, чтобы открыть настройки запуска.";
+      } else if (generationMode) {
+        setStatus("Режим генерации: загрузите контрольный макет. Цель и аудиторию можно оставить пустыми.");
+        subtitleNode.textContent = "OpenClaw-заготовка подготовит агентный запуск для генерации гипотез и варианта.";
+      } else {
+        setStatus("Загружен пример: кредитный калькулятор с разными значениями суммы и срока по умолчанию.");
+        subtitleNode.textContent = "После запуска здесь появятся голоса персон, причины выбора и рекомендации.";
+      }
+    }
+
+    function renderRunningProgress(totalPersonas, baselineMarker, mode = "ab_test") {
+      const generationMode = mode === "variant_generation";
       progressState = {
         baselineMarker,
         experimentId: null,
         startedAt: Date.now(),
         totalPersonas,
-        totalDecisions: totalPersonas * 2,
+        totalDecisions: generationMode ? 0 : totalPersonas * 2,
+        mode,
         percent: 0,
         active: true
       };
@@ -767,8 +890,8 @@ async def index() -> str:
         <div class="run-progress" id="runProgress">
           <div class="run-progress-top">
             <div class="run-progress-copy">
-              <h2>Симуляция выполняется</h2>
-              <p id="progressStageText">Создаем эксперимент и готовим изображения.</p>
+              <h2>${generationMode ? "Готовим OpenClaw-запуск" : "Симуляция выполняется"}</h2>
+              <p id="progressStageText">${generationMode ? "Создаем эксперимент и фиксируем заявку для агентной системы." : "Создаем эксперимент и готовим изображения."}</p>
               <div class="run-progress-eta" id="progressEta">Оцениваем время</div>
             </div>
             <div class="run-progress-percent" id="progressPercent">0%</div>
@@ -779,10 +902,15 @@ async def index() -> str:
           <div class="run-stages">
             <div class="run-stage active" data-stage="setup"><span class="stage-dot"></span><span class="stage-label">Создание эксперимента</span><span class="stage-count">в процессе</span></div>
             <div class="run-stage" data-stage="upload"><span class="stage-dot"></span><span class="stage-label">Загрузка изображений</span><span class="stage-count">ожидает</span></div>
-            <div class="run-stage" data-stage="personas"><span class="stage-dot"></span><span class="stage-label">Генерация персон</span><span class="stage-count">0 / ${totalPersonas}</span></div>
-            <div class="run-stage" data-stage="visual"><span class="stage-dot"></span><span class="stage-label">Проверка визуала</span><span class="stage-count">ожидает</span></div>
-            <div class="run-stage" data-stage="simulation"><span class="stage-dot"></span><span class="stage-label">Голосование персон</span><span class="stage-count">0 / ${totalPersonas * 2}</span></div>
-            <div class="run-stage" data-stage="report"><span class="stage-dot"></span><span class="stage-label">Сборка отчета</span><span class="stage-count">ожидает</span></div>
+            ${generationMode ? `
+              <div class="run-stage" data-stage="openclaw"><span class="stage-dot"></span><span class="stage-label">Заявка OpenClaw</span><span class="stage-count">ожидает</span></div>
+              <div class="run-stage" data-stage="report"><span class="stage-dot"></span><span class="stage-label">Готовность к следующему шагу</span><span class="stage-count">ожидает</span></div>
+            ` : `
+              <div class="run-stage" data-stage="personas"><span class="stage-dot"></span><span class="stage-label">Генерация персон</span><span class="stage-count">0 / ${totalPersonas}</span></div>
+              <div class="run-stage" data-stage="visual"><span class="stage-dot"></span><span class="stage-label">Проверка визуала</span><span class="stage-count">ожидает</span></div>
+              <div class="run-stage" data-stage="simulation"><span class="stage-dot"></span><span class="stage-label">Голосование персон</span><span class="stage-count">0 / ${totalPersonas * 2}</span></div>
+              <div class="run-stage" data-stage="report"><span class="stage-dot"></span><span class="stage-label">Сборка отчета</span><span class="stage-count">ожидает</span></div>
+            `}
           </div>
         </div>
       `;
@@ -841,6 +969,16 @@ async def index() -> str:
       const scoped = progressState.experimentId
         ? recentLines.filter(line => line.includes(`experiment_id=${progressState.experimentId}`))
         : recentLines;
+      if (progressState.mode === "variant_generation") {
+        const openClawStarted = scoped.some(line => line.includes("Variant generation requested"));
+        const openClawDone = scoped.some(line => line.includes("OpenClaw variant generation completed")) || scoped.some(line => line.includes("Variant generation stub completed"));
+        if (progressState.experimentId) setProgressStage("setup", "done", "готово");
+        setProgressStage("openclaw", openClawDone ? "done" : openClawStarted ? "active" : "", openClawDone ? "готово" : openClawStarted ? "в процессе" : "ожидает");
+        setProgressStage("report", openClawDone ? "done" : "", openClawDone ? "готово" : "ожидает");
+        setProgressText(openClawDone ? "Заготовка OpenClaw создана." : "Фиксируем заявку для будущего агентного рантайма.");
+        updateProgressPercent(openClawDone ? 100 : openClawStarted ? 72 : 35);
+        return;
+      }
       const generatedPersonas = Math.min(
         progressState.totalPersonas,
         scoped.filter(line => line.includes("Generated persona experiment_id=")).length
@@ -890,6 +1028,13 @@ async def index() -> str:
       progressState.active = false;
       setProgressStage("setup", "done", "готово");
       setProgressStage("upload", "done", "готово");
+      if (progressState.mode === "variant_generation") {
+        setProgressStage("openclaw", "done", "готово");
+        setProgressStage("report", "done", "готово");
+        setProgressText("Заготовка OpenClaw создана.");
+        updateProgressPercent(100);
+        return;
+      }
       setProgressStage("personas", "done", `${progressState.totalPersonas} / ${progressState.totalPersonas}`);
       setProgressStage("visual", "done", "готово");
       setProgressStage("simulation", "done", `${progressState.totalDecisions} / ${progressState.totalDecisions}`);
@@ -1058,9 +1203,54 @@ async def index() -> str:
       `;
     }
 
+    function renderGenerationResult(result) {
+      const agentResponse = result.agent_response || {};
+      const hypotheses = agentResponse.hypotheses || [];
+      const variantDirection = agentResponse.variant_direction || {};
+      const runtimeLabel = result.runtime === "openclaw_gateway" ? "gateway" : result.runtime || "unknown";
+      const transportText = result.runtime === "openclaw_gateway"
+        ? "Поля и контрольная картинка отправлены в настоящий OpenClaw Gateway."
+        : "Поля и контрольная картинка отправлены в OpenClaw.";
+      winnerNode.textContent = "OpenClaw: ответ получен";
+      subtitleNode.textContent = "Локальный OpenClaw-прототип вернул гипотезы и направление варианта.";
+      reportNode.className = "report-body";
+      reportNode.innerHTML = `
+        <div class="block">
+          <h2>Ответ OpenClaw получен</h2>
+          <p>${escapeHtml(result.message || "OpenClaw обработал контрольный макет.")}</p>
+        </div>
+        <div class="metrics">
+          <div class="metric"><div class="metric-label">Experiment ID</div><div class="metric-value">${result.experiment_id}</div></div>
+          <div class="metric"><div class="metric-label">Статус</div><div class="metric-value">done</div></div>
+          <div class="metric"><div class="metric-label">Runtime</div><div class="metric-value">${runtimeLabel}</div></div>
+          <div class="metric"><div class="metric-label">Режим</div><div class="metric-value">agent</div></div>
+        </div>
+        <div class="block">
+          <h3>Гипотезы</h3>
+          ${renderList(hypotheses.map(item => `${item.title}: ${item.rationale}`), "OpenClaw пока не вернул гипотезы.")}
+        </div>
+        <div class="block">
+          <h3>Направление тестового варианта</h3>
+          ${renderConclusionText(`${variantDirection.name || ""}. ${variantDirection.summary || ""}`.trim(), "Направление варианта пока не сформировано.")}
+        </div>
+        <div class="block">
+          <h3>Технический контур</h3>
+          <ul>
+            <li>${transportText}</li>
+            <li>Контракт заявки сохранен в ${escapeHtml(result.request_path || "storage")}.</li>
+            <li>Ответ OpenClaw сохранен в ${escapeHtml(result.response_path || "storage")}.</li>
+          </ul>
+        </div>
+      `;
+    }
+
     setupPreview("control", "controlDrop", "controlPreview", "controlName");
     setupPreview("challenger", "challengerDrop", "challengerPreview", "challengerName");
     document.getElementById("refreshLogs").addEventListener("click", refreshLogs);
+    document.querySelectorAll('input[name="experimentMode"]').forEach(input => {
+      input.addEventListener("change", syncModeUi);
+    });
+    syncModeUi();
 
     defaultFilesPromise = Promise.all([
       loadDefaultFile("/static/consumer_loan_300k_5y.png", "consumer_loan_300k_5y.png"),
@@ -1075,23 +1265,35 @@ async def index() -> str:
     document.getElementById("run").addEventListener("click", async () => {
       const button = document.getElementById("run");
       button.disabled = true;
+      const mode = currentMode();
+      if (!mode) {
+        setStatus("Сначала выберите режим эксперимента.", true);
+        button.disabled = false;
+        return;
+      }
+      const generationMode = mode === "variant_generation";
       const totalPersonas = Number(document.getElementById("personas").value);
       const baselineLines = await logSnapshot();
       const baselineMarker = baselineLines.length ? baselineLines[baselineLines.length - 1] : "";
       sessionLogMarker = baselineMarker;
       logsNode.textContent = "Лог пока пуст.";
-      renderRunningProgress(totalPersonas, baselineMarker);
+      renderRunningProgress(totalPersonas, baselineMarker, mode);
       startLogPolling();
-      winnerNode.textContent = "Расчет...";
-      subtitleNode.textContent = "Создаем эксперимент и опрашиваем синтетические персоны.";
-      setStatus("Запускаем эксперимент...");
+      winnerNode.textContent = generationMode ? "OpenClaw..." : "Расчет...";
+      subtitleNode.textContent = generationMode
+        ? "Создаем заготовку для агентной генерации варианта."
+        : "Создаем эксперимент и опрашиваем синтетические персоны.";
+      setStatus(generationMode ? "Готовим OpenClaw-заявку..." : "Запускаем эксперимент...");
       try {
         if (defaultFilesPromise) {
           await defaultFilesPromise;
         }
         const controlFile = selectedControlFile || defaultControlFile || document.getElementById("control").files[0];
         const challengerFile = selectedChallengerFile || defaultChallengerFile || document.getElementById("challenger").files[0];
-        if (!controlFile || !challengerFile) {
+        if (!controlFile) {
+          throw new Error("Загрузите контрольный скриншот.");
+        }
+        if (!generationMode && !challengerFile) {
           throw new Error("Загрузите оба скриншота: базовый и тестовый варианты.");
         }
 
@@ -1100,6 +1302,7 @@ async def index() -> str:
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({
             name: document.getElementById("name").value,
+            mode,
             conversion_goal: document.getElementById("goal").value,
             target_audience: document.getElementById("audience").value
           })
@@ -1110,12 +1313,31 @@ async def index() -> str:
         setProgressText("Загружаем изображения и готовим запуск.");
         updateProgressPercent(8);
 
-        setStatus("Загружаем изображения...");
+        setStatus(generationMode ? "Загружаем контрольный макет..." : "Загружаем изображения...");
         const form = new FormData();
         form.append("control", controlFile);
-        form.append("challenger", challengerFile);
+        if (!generationMode) {
+          form.append("challenger", challengerFile);
+        }
         await fetch(`/experiments/${created.id}/upload`, { method: "POST", body: form }).then(parseResponse);
         setProgressStage("upload", "done", "готово");
+        if (generationMode) {
+          setProgressStage("openclaw", "active", "в процессе");
+          setProgressText("Создаем заявку для будущего OpenClaw-агента.");
+          updateProgressPercent(35);
+          setStatus("Формируем OpenClaw-заготовку...");
+          const result = await fetch(`/experiments/${created.id}/run-generation`, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({
+              batch_size: Number(document.getElementById("batch").value)
+            })
+          }).then(parseResponse);
+          finishProgress();
+          renderGenerationResult(result);
+          setStatus("OpenClaw вернул гипотезы.");
+          return;
+        }
         setProgressStage("personas", "active", `0 / ${totalPersonas}`);
         setProgressText("Генерируем синтетические персоны.");
         updateProgressPercent(15);
@@ -1137,7 +1359,7 @@ async def index() -> str:
         winnerNode.textContent = "Ошибка";
         subtitleNode.textContent = "Проверьте параметры эксперимента и файлы.";
         reportNode.className = "empty";
-        reportNode.innerHTML = `<div class="empty-inner"><div class="empty-visual"></div><h2>Не удалось запустить симуляцию</h2><p class="error">${escapeHtml(error.message || String(error))}</p></div>`;
+        reportNode.innerHTML = `<div class="empty-inner"><div class="empty-visual"></div><h2>Не удалось выполнить запуск</h2><p class="error">${escapeHtml(error.message || String(error))}</p></div>`;
         setStatus(error.message || String(error), true);
       } finally {
         stopLogPolling();

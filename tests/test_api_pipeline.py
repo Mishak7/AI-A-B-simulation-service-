@@ -108,3 +108,76 @@ def test_mock_pipeline_end_to_end(tmp_path, monkeypatch) -> None:
         log_lines = "\n".join(logs.json()["lines"])
         assert "Run completed experiment_id=" in log_lines
         assert "Generated persona experiment_id=" in log_lines
+
+
+def test_variant_generation_calls_openclaw_gateway(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv(
+        "SAB_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path / 'generation.db'}"
+    )
+    monkeypatch.setenv("SAB_STORAGE_DIR", str(tmp_path / "storage"))
+    monkeypatch.setenv("SAB_LOG_FILE", str(tmp_path / "generation.log"))
+    monkeypatch.setenv("SAB_LLM_PROVIDER", "mock")
+    monkeypatch.setenv("SAB_OPENCLAW_BASE_URL", "http://openclaw-gateway:18789")
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+
+    async def fake_call_openclaw(self, payload):
+        return {
+            "agent": "openclaw_gateway",
+            "status": "completed",
+            "hypotheses": [{"title": "Test", "rationale": "Because"}],
+            "variant_direction": {"name": "Variant", "summary": "Summary"},
+            "next_step": "Next",
+        }
+
+    from app.services.openclaw_variant_generator import OpenClawVariantGenerator
+
+    monkeypatch.setattr(OpenClawVariantGenerator, "_call_openclaw", fake_call_openclaw)
+
+    main = importlib.import_module("app.main")
+
+    from fastapi.testclient import TestClient
+
+    with TestClient(main.app) as client:
+        created = client.post(
+            "/experiments",
+            json={
+                "name": "Generate variant",
+                "mode": "variant_generation",
+                "conversion_goal": "",
+                "target_audience": "",
+            },
+        )
+        assert created.status_code == 200
+        experiment_id = created.json()["id"]
+        assert created.json()["mode"] == "variant_generation"
+
+        uploaded = client.post(
+            f"/experiments/{experiment_id}/upload",
+            files={"control": ("control.png", PNG_1X1, "image/png")},
+        )
+        assert uploaded.status_code == 200
+        assert uploaded.json()["challenger_image_path"] is None
+
+        result = client.post(
+            f"/experiments/{experiment_id}/run-generation",
+            json={"batch_size": 3},
+        )
+        assert result.status_code == 200
+        payload = result.json()
+        assert payload["status"] == "completed_openclaw"
+        assert payload["runtime"] == "openclaw_gateway"
+        assert payload["agent_response"]["status"] == "completed"
+        assert payload["agent_response"]["agent"] == "openclaw_gateway"
+        assert len(payload["agent_response"]["hypotheses"]) == 1
+        from pathlib import Path
+
+        assert Path(payload["request_path"]).exists()
+        assert Path(payload["response_path"]).exists()
+
+        ab_run = client.post(
+            f"/experiments/{experiment_id}/run",
+            json={"num_personas": 3, "batch_size": 2, "early_stopping": False},
+        )
+        assert ab_run.status_code == 400

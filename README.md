@@ -38,11 +38,70 @@ API docs:
 http://127.0.0.1:8000/docs
 ```
 
+## Docker Compose
+
+To run the main app together with the official OpenClaw Gateway container:
+
+```bash
+docker compose up --build
+```
+
+Open the app at:
+
+```text
+http://127.0.0.1:8011
+```
+
+Compose starts two services:
+
+- `web`: the SimAB FastAPI app.
+- `openclaw-gateway`: a thin project image built `FROM ghcr.io/openclaw/openclaw:latest` with `openclaw/openclaw.json5` copied in.
+
+The `web` service calls OpenClaw through:
+
+```env
+SAB_OPENCLAW_BASE_URL=http://openclaw-gateway:18789
+SAB_OPENCLAW_MODEL=openclaw/default
+SAB_OPENCLAW_GATEWAY_TOKEN=<same value as OPENCLAW_GATEWAY_TOKEN when auth is enabled>
+```
+
+Compose uses `simab-dev-openclaw-token` as a local fallback token because OpenClaw refuses to bind the Gateway to `0.0.0.0` without auth. Set `OPENCLAW_GATEWAY_TOKEN` in `.env` to replace it.
+
+By default, the Gateway is published on host port `18789`. If you already have another OpenClaw Gateway running locally, keep the internal compose URL unchanged and only move the host port:
+
+```env
+OPENCLAW_GATEWAY_HOST_PORT=18791
+```
+
+OpenClaw Gateway exposes OpenAI-compatible endpoints, including `/v1/chat/completions`. The minimal project config lives in `openclaw/openclaw.json5` and enables `gateway.http.endpoints.chatCompletions.enabled`. The Compose container also starts with `--allow-unconfigured` so it can still boot while you iterate on the OpenClaw setup. Configure agents and richer Gateway behavior in that OpenClaw config as the agent system grows. The Compose file also passes through these model env vars for convenience:
+
+```env
+SAB_REAL_API_KEY=...
+SAB_REAL_BASE_URL=https://api.vsellm.ru/v1
+SAB_REAL_MODEL=google/gemini-2.5-flash
+```
+
+Useful logs:
+
+```bash
+docker compose logs -f openclaw-gateway
+docker compose logs -f web
+```
+
+In the `web` logs, look for:
+
+- `Sending OpenClaw Gateway request`
+- `OpenClaw Gateway response status=...`
+- `OpenClaw Gateway response parsed`
+
+In the `openclaw-gateway` logs, use the Gateway's own startup, model, auth, and request logs to verify whether the model request is accepted.
+
 ## API
 
 - `POST /experiments` creates an experiment.
 - `POST /experiments/{id}/upload` uploads `control` and `challenger` image files.
 - `POST /experiments/{id}/run` runs the simulation.
+- `POST /experiments/{id}/run-generation` sends the experiment fields and control image to OpenClaw.
 - `GET /experiments/{id}` returns experiment status.
 - `GET /experiments/{id}/report` returns the final report.
 

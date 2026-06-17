@@ -14,6 +14,7 @@ from app.db.session import get_session
 from app.llm.factory import get_llm_client
 from app.models import (
     Experiment,
+    ExperimentMode,
     ExperimentReport,
     ExperimentStatus,
     Persona,
@@ -24,9 +25,11 @@ from app.schemas import (
     ExperimentRead,
     ExperimentReportRead,
     RunExperimentRequest,
+    RunVariantGenerationRequest,
     SimulationResultRead,
 )
 from app.services.aggregator import Aggregator
+from app.services.openclaw_variant_generator import OpenClawVariantGenerator
 from app.services.persona_generator import PersonaGenerator
 from app.services.prompt_renderer import PromptRenderer
 from app.services.report_generator import ReportGenerator
@@ -43,6 +46,7 @@ async def create_experiment(
 ) -> Experiment:
     experiment = Experiment(
         name=payload.name,
+        mode=payload.mode,
         conversion_goal=payload.conversion_goal,
         target_audience=payload.target_audience,
     )
@@ -63,24 +67,26 @@ async def create_experiment(
 async def upload_images(
     experiment_id: int,
     control: UploadFile = File(...),
-    challenger: UploadFile = File(...),
+    challenger: UploadFile | None = File(default=None),
     session: AsyncSession = Depends(get_session),
 ) -> Experiment:
     experiment = await _get_experiment(session, experiment_id)
     _validate_image(control)
-    _validate_image(challenger)
+    if challenger is not None:
+        _validate_image(challenger)
 
     experiment_dir = get_settings().storage_dir / str(experiment.id)
     experiment_dir.mkdir(parents=True, exist_ok=True)
     control_path = _save_upload(
         control, experiment_dir / f"control{_suffix(control.filename)}"
     )
-    challenger_path = _save_upload(
-        challenger, experiment_dir / f"challenger{_suffix(challenger.filename)}"
-    )
-
     experiment.control_image_path = str(control_path)
-    experiment.challenger_image_path = str(challenger_path)
+    challenger_path = None
+    if challenger is not None:
+        challenger_path = _save_upload(
+            challenger, experiment_dir / f"challenger{_suffix(challenger.filename)}"
+        )
+        experiment.challenger_image_path = str(challenger_path)
     await session.commit()
     await session.refresh(experiment)
     logger.info(
@@ -99,6 +105,10 @@ async def run_experiment(
     session: AsyncSession = Depends(get_session),
 ) -> ExperimentReportRead:
     experiment = await _get_experiment(session, experiment_id)
+    if experiment.mode != ExperimentMode.ab_test:
+        raise HTTPException(
+            status_code=400, detail="Use /run-generation for variant generation experiments"
+        )
     if not experiment.conversion_goal:
         raise HTTPException(status_code=400, detail="conversion_goal is required")
     if not experiment.control_image_path or not experiment.challenger_image_path:
@@ -174,6 +184,56 @@ async def run_experiment(
         return _report_to_schema(report, results)
     except Exception:
         logger.exception("Run failed experiment_id=%s", experiment_id)
+        experiment.status = ExperimentStatus.failed
+        await session.commit()
+        raise
+
+
+@router.post("/{experiment_id}/run-generation")
+async def run_variant_generation(
+    experiment_id: int,
+    payload: RunVariantGenerationRequest,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, object]:
+    experiment = await _get_experiment(session, experiment_id)
+    if experiment.mode != ExperimentMode.variant_generation:
+        raise HTTPException(
+            status_code=400, detail="Experiment mode must be variant_generation"
+        )
+    if not experiment.control_image_path:
+        raise HTTPException(status_code=400, detail="Control image is required")
+
+    logger.info(
+        "Variant generation requested experiment_id=%s batch_size=%s",
+        experiment_id,
+        payload.batch_size,
+    )
+    experiment.status = ExperimentStatus.running
+    await session.execute(
+        delete(SimulationResult).where(SimulationResult.experiment_id == experiment_id)
+    )
+    await session.execute(
+        delete(ExperimentReport).where(ExperimentReport.experiment_id == experiment_id)
+    )
+    await session.execute(delete(Persona).where(Persona.experiment_id == experiment_id))
+    await session.commit()
+
+    try:
+        result = await OpenClawVariantGenerator().start(
+            experiment=experiment,
+            batch_size=payload.batch_size,
+        )
+        experiment.status = ExperimentStatus.completed
+        experiment.completed_at = datetime.now(UTC)
+        await session.commit()
+        logger.info(
+            "Variant generation completed experiment_id=%s status=%s",
+            experiment_id,
+            result["status"],
+        )
+        return result
+    except Exception:
+        logger.exception("Variant generation failed experiment_id=%s", experiment_id)
         experiment.status = ExperimentStatus.failed
         await session.commit()
         raise

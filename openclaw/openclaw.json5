@@ -1,0 +1,58 @@
+{
+  agents: {
+    defaults: {
+      model: {
+        primary: "simab/google/gemini-2.5-flash",
+      },
+      imageModel: {
+        primary: "simab/google/gemini-2.5-flash",
+      },
+      models: {
+        "simab/google/gemini-2.5-flash": {
+          alias: "simab",
+        },
+      },
+      thinkingDefault: "off",
+      reasoningDefault: "off",
+    },
+  },
+  gateway: {
+    mode: "local",
+    auth: {
+      mode: "token",
+    },
+    http: {
+      endpoints: {
+        chatCompletions: {
+          enabled: true,
+        },
+        responses: {
+          enabled: true,
+        },
+      },
+    },
+  },
+  models: {
+    mode: "merge",
+    providers: {
+      simab: {
+        baseUrl: "${SAB_REAL_BASE_URL}",
+        apiKey: "${SAB_REAL_API_KEY}",
+        api: "openai-completions",
+        authHeader: true,
+        models: [
+          {
+            id: "google/gemini-2.5-flash",
+            name: "SimAB Gemini 2.5 Flash",
+            reasoning: false,
+            input: ["text", "image"],
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+            contextWindow: 1048576,
+            contextTokens: 200000,
+            maxTokens: 8192,
+          },
+        ],
+      },
+    },
+  },
+}

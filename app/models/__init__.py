@@ -1,4 +1,4 @@
-from app.models.experiment import Experiment, ExperimentStatus
+from app.models.experiment import Experiment, ExperimentMode, ExperimentStatus
 from app.models.persona import Persona
 from app.models.report import ExperimentReport
 from app.models.simulation_result import (
@@ -13,6 +13,7 @@ from app.models.simulation_result import (
 __all__ = [
     "ConfidenceLevel",
     "Experiment",
+    "ExperimentMode",
     "ExperimentReport",
     "ExperimentStatus",
     "MappedVerdict",

@@ -1,0 +1,53 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8011:8000"
+    environment:
+      SAB_DATABASE_URL: sqlite+aiosqlite:///./synthetic_ab.db
+      SAB_STORAGE_DIR: /app/app/storage
+      SAB_LOG_FILE: /app/app/storage/simab.log
+      SAB_LLM_PROVIDER: ${SAB_LLM_PROVIDER}
+      SAB_REAL_API_KEY: ${SAB_REAL_API_KEY}
+      SAB_REAL_BASE_URL: ${SAB_REAL_BASE_URL:-https://api.vsellm.ru/v1}
+      SAB_REAL_MODEL: ${SAB_REAL_MODEL:-google/gemini-2.5-flash}
+      SAB_OPENCLAW_BASE_URL: http://openclaw-gateway:18789
+      SAB_OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:-simab-dev-openclaw-token}
+      SAB_OPENCLAW_MODEL: ${SAB_OPENCLAW_MODEL:-openclaw/default}
+    volumes:
+      - simab_storage:/app/app/storage
+    depends_on:
+      openclaw-gateway:
+        condition: service_healthy
+
+  openclaw-gateway:
+    build:
+      context: ./openclaw
+      dockerfile: Dockerfile
+      args:
+        OPENCLAW_IMAGE: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:latest}
+    image: simab-openclaw-gateway
+    command: ["node", "openclaw.mjs", "gateway", "--allow-unconfigured"]
+    environment:
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:-simab-dev-openclaw-token}
+      OPENCLAW_GATEWAY_PORT: 18789
+      OPENCLAW_CONFIG_PATH: /home/node/.openclaw/openclaw.json
+      OPENCLAW_DISABLE_BONJOUR: "1"
+      SAB_REAL_API_KEY: ${SAB_REAL_API_KEY:-}
+      SAB_REAL_BASE_URL: ${SAB_REAL_BASE_URL:-https://api.vsellm.ru/v1}
+      SAB_REAL_MODEL: ${SAB_REAL_MODEL:-google/gemini-2.5-flash}
+    ports:
+      - "${OPENCLAW_GATEWAY_HOST_PORT:-18789}:18789"
+    volumes:
+      - openclaw_config:/home/node/.config/openclaw
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:18789/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+volumes:
+  simab_storage:
+  openclaw_config:
