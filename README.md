@@ -61,16 +61,16 @@ The `web` service calls OpenClaw through:
 
 ```env
 SAB_OPENCLAW_BASE_URL=http://openclaw-gateway:18789
-SAB_OPENCLAW_MODEL=openclaw/default
+SAB_OPENCLAW_MODEL=openclaw/product_manager
 SAB_OPENCLAW_GATEWAY_TOKEN=<same value as OPENCLAW_GATEWAY_TOKEN when auth is enabled>
 ```
 
 Compose uses `simab-dev-openclaw-token` as a local fallback token because OpenClaw refuses to bind the Gateway to `0.0.0.0` without auth. Set `OPENCLAW_GATEWAY_TOKEN` in `.env` to replace it.
 
-By default, the Gateway is published on host port `18789`. If you already have another OpenClaw Gateway running locally, keep the internal compose URL unchanged and only move the host port:
+By default, the Gateway is published on host port `18791` to avoid clashing with a separately installed local OpenClaw Gateway on `18789`. Keep the internal compose URL unchanged and only move the host port when needed:
 
 ```env
-OPENCLAW_GATEWAY_HOST_PORT=18791
+OPENCLAW_GATEWAY_HOST_PORT=18792
 ```
 
 OpenClaw Gateway exposes OpenAI-compatible endpoints, including `/v1/chat/completions`. The minimal project config lives in `openclaw/openclaw.json5` and enables `gateway.http.endpoints.chatCompletions.enabled`. The Compose container also starts with `--allow-unconfigured` so it can still boot while you iterate on the OpenClaw setup. Configure agents and richer Gateway behavior in that OpenClaw config as the agent system grows. The Compose file also passes through these model env vars for convenience:
@@ -79,6 +79,62 @@ OpenClaw Gateway exposes OpenAI-compatible endpoints, including `/v1/chat/comple
 SAB_REAL_API_KEY=...
 SAB_REAL_BASE_URL=https://api.vsellm.ru/v1
 SAB_REAL_MODEL=google/gemini-2.5-flash
+```
+
+The OpenClaw image copies these project files at build time:
+
+```text
+openclaw/agents -> /home/node/.openclaw/agents
+openclaw/skills -> /home/node/.openclaw/skills
+```
+
+For live editing without rebuilding, run Compose with the workspace override:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.openclaw-workspace.yml up --build
+```
+
+On Docker Desktop for macOS, bind mounts require File Sharing access to this project path. If you see `operation not permitted` for `/Users/.../Documents/...`, add `/Users/mikhailkozyrev/Documents` in Docker Desktop Settings -> Resources -> File Sharing, then restart Docker Desktop.
+
+Current empty agent and OpenClaw-native skill scaffolds:
+
+```text
+openclaw/agents/product_manager.md
+openclaw/agents/ux_designer.md
+openclaw/agents/ux_researcher.md
+openclaw/agents/critic.md
+openclaw/skills/hypothesis_scorer/SKILL.md
+openclaw/skills/mockup_generator/SKILL.md
+```
+
+Variant generation uses this OpenClaw pipeline:
+
+```text
+product_manager.md
+ux_designer.md
+ux_researcher.md
+        ↓
+hypothesis_scorer/SKILL.md
+        ↓
+auto-select first top hypothesis
+        ↓
+mockup_generator/SKILL.md
+        ↓
+critic.md
+        ↓
+ready for synthetic A/B
+```
+
+The manual user-selection step is represented in the response as `selected_hypothesis`; until a dedicated UI is added, SimAB selects the first item from `top_hypotheses`.
+
+Smoke checks:
+
+```bash
+curl -H "Authorization: Bearer simab-dev-openclaw-token" http://127.0.0.1:18791/v1/models
+curl -H "Authorization: Bearer simab-dev-openclaw-token" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"openclaw/product_manager","messages":[{"role":"user","content":"Return {\"ok\":true} as JSON."}]}' \
+  http://127.0.0.1:18791/v1/chat/completions
 ```
 
 Useful logs:

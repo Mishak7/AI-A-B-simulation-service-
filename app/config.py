@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     log_backup_count: int = 3
     openclaw_base_url: str | None = None
     openclaw_gateway_token: str | None = None
-    openclaw_model: str = "openclaw/default"
+    openclaw_model: str = "openclaw/product_manager"
     openclaw_timeout_seconds: float = 120.0
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="SAB_")

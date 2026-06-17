@@ -15,7 +15,7 @@ services:
       SAB_REAL_MODEL: ${SAB_REAL_MODEL:-google/gemini-2.5-flash}
       SAB_OPENCLAW_BASE_URL: http://openclaw-gateway:18789
       SAB_OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:-simab-dev-openclaw-token}
-      SAB_OPENCLAW_MODEL: ${SAB_OPENCLAW_MODEL:-openclaw/default}
+      SAB_OPENCLAW_MODEL: ${SAB_OPENCLAW_MODEL:-openclaw/product_manager}
     volumes:
       - simab_storage:/app/app/storage
     depends_on:
@@ -39,7 +39,7 @@ services:
       SAB_REAL_BASE_URL: ${SAB_REAL_BASE_URL:-https://api.vsellm.ru/v1}
       SAB_REAL_MODEL: ${SAB_REAL_MODEL:-google/gemini-2.5-flash}
     ports:
-      - "${OPENCLAW_GATEWAY_HOST_PORT:-18789}:18789"
+      - "${OPENCLAW_GATEWAY_HOST_PORT:-18791}:18789"
     volumes:
       - openclaw_config:/home/node/.config/openclaw
     healthcheck:

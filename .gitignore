@@ -7,3 +7,4 @@ __pycache__/
 *.db
 app/storage/*
 !app/storage/.gitkeep
+.graphify-out/

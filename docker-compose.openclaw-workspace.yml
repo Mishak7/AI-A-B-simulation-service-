@@ -1,0 +1,5 @@
+services:
+  openclaw-gateway:
+    volumes:
+      - ./openclaw/agents:/home/node/.openclaw/agents
+      - ./openclaw/skills:/home/node/.openclaw/skills

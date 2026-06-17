@@ -15,6 +15,43 @@
       thinkingDefault: "off",
       reasoningDefault: "off",
     },
+    list: [
+      {
+        id: "product_manager",
+        default: true,
+        name: "Product Manager",
+        model: {
+          primary: "simab/google/gemini-2.5-flash",
+        },
+        skills: ["hypothesis-scorer", "mockup-generator"],
+        thinkingDefault: "off",
+        reasoningDefault: "off",
+      },
+      {
+        id: "ux_designer",
+        name: "UX Designer",
+        model: {
+          primary: "simab/google/gemini-2.5-flash",
+        },
+        skills: ["mockup-generator"],
+      },
+      {
+        id: "ux_researcher",
+        name: "UX Researcher",
+        model: {
+          primary: "simab/google/gemini-2.5-flash",
+        },
+        skills: ["hypothesis-scorer"],
+      },
+      {
+        id: "critic",
+        name: "Critic",
+        model: {
+          primary: "simab/google/gemini-2.5-flash",
+        },
+        skills: ["hypothesis-scorer"],
+      },
+    ],
   },
   gateway: {
     mode: "local",
@@ -53,6 +90,12 @@
           },
         ],
       },
+    },
+  },
+  skills: {
+    load: {
+      extraDirs: ["/home/node/.openclaw/skills"],
+      watch: true,
     },
   },
 }
