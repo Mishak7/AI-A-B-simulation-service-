@@ -122,18 +122,49 @@ def test_variant_generation_calls_openclaw_gateway(tmp_path, monkeypatch) -> Non
 
     get_settings.cache_clear()
 
-    async def fake_call_openclaw(self, payload):
+    async def fake_generate_hypotheses(self, payload):
         return {
-            "agent": "openclaw_gateway",
-            "status": "completed",
-            "hypotheses": [{"title": "Test", "rationale": "Because"}],
-            "variant_direction": {"name": "Variant", "summary": "Summary"},
-            "next_step": "Next",
+            "agent": "openclaw_pipeline",
+            "status": "hypotheses_ready",
+            "hypotheses": [
+                {
+                    "title": "Test",
+                    "rationale": "Because",
+                    "hypothesis": "If X then Y",
+                    "proposed_change": "Change CTA",
+                }
+            ],
+            "variant_direction": {},
+            "next_step": "user_selects_top_hypothesis",
+        }
+
+    async def fake_generate_mockup(self, experiment, selected_hypothesis, batch_size):
+        challenger_path = tmp_path / "storage" / str(experiment.id) / "challenger.svg"
+        challenger_path.parent.mkdir(parents=True, exist_ok=True)
+        challenger_path.write_text("<svg xmlns='http://www.w3.org/2000/svg'></svg>")
+        return {
+            "experiment_id": experiment.id,
+            "status": "mockup_ready",
+            "message": "ready",
+            "response_path": str(tmp_path / "response.json"),
+            "challenger_image_path": str(challenger_path),
+            "challenger_image_data_url": "data:image/svg+xml;base64,PHN2Zy8+",
+            "runtime": "openclaw_gateway",
+            "agent_response": {
+                "mockup_generator": {"variant_name": "Variant"},
+                "critic": {"final_decision": "accept", "score": 5},
+                "critic_attempts": [{"attempt": 1}],
+            },
         }
 
     from app.services.openclaw_variant_generator import OpenClawVariantGenerator
 
-    monkeypatch.setattr(OpenClawVariantGenerator, "_call_openclaw", fake_call_openclaw)
+    monkeypatch.setattr(
+        OpenClawVariantGenerator, "_generate_hypotheses", fake_generate_hypotheses
+    )
+    monkeypatch.setattr(
+        OpenClawVariantGenerator, "generate_mockup", fake_generate_mockup
+    )
 
     main = importlib.import_module("app.main")
 
@@ -166,18 +197,33 @@ def test_variant_generation_calls_openclaw_gateway(tmp_path, monkeypatch) -> Non
         )
         assert result.status_code == 200
         payload = result.json()
-        assert payload["status"] == "completed_openclaw"
+        assert payload["status"] == "hypotheses_ready"
         assert payload["runtime"] == "openclaw_gateway"
-        assert payload["agent_response"]["status"] == "completed"
-        assert payload["agent_response"]["agent"] == "openclaw_gateway"
+        assert payload["agent_response"]["status"] == "hypotheses_ready"
+        assert payload["agent_response"]["agent"] == "openclaw_pipeline"
         assert len(payload["agent_response"]["hypotheses"]) == 1
         from pathlib import Path
 
         assert Path(payload["request_path"]).exists()
         assert Path(payload["response_path"]).exists()
 
+        mockup = client.post(
+            f"/experiments/{experiment_id}/generate-mockup",
+            json={
+                "selected_hypothesis": payload["agent_response"]["hypotheses"][0],
+                "batch_size": 3,
+            },
+        )
+        assert mockup.status_code == 200
+        assert mockup.json()["status"] == "mockup_ready"
+        assert Path(mockup.json()["challenger_image_path"]).exists()
+
         ab_run = client.post(
             f"/experiments/{experiment_id}/run",
             json={"num_personas": 3, "batch_size": 2, "early_stopping": False},
         )
         assert ab_run.status_code == 400
+
+        approved = client.post(f"/experiments/{experiment_id}/approve-generated-variant")
+        assert approved.status_code == 200
+        assert approved.json()["mode"] == "ab_test"

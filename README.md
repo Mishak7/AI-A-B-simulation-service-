@@ -62,6 +62,7 @@ The `web` service calls OpenClaw through:
 ```env
 SAB_OPENCLAW_BASE_URL=http://openclaw-gateway:18789
 SAB_OPENCLAW_MODEL=openclaw/product_manager
+SAB_OPENCLAW_IMAGE_MODEL=google/gemini-2.5-flash-image
 SAB_OPENCLAW_GATEWAY_TOKEN=<same value as OPENCLAW_GATEWAY_TOKEN when auth is enabled>
 ```
 
@@ -116,16 +117,18 @@ ux_researcher.md
         ↓
 hypothesis_scorer/SKILL.md
         ↓
-auto-select first top hypothesis
+user selects one of the top 3 hypotheses
         ↓
 mockup_generator/SKILL.md
         ↓
-critic.md
+critic.md, up to 3 revise attempts
+        ↓
+user approves generated challenger
         ↓
 ready for synthetic A/B
 ```
 
-The manual user-selection step is represented in the response as `selected_hypothesis`; until a dedicated UI is added, SimAB selects the first item from `top_hypotheses`.
+The `mockup_generator` step uses `SAB_OPENCLAW_IMAGE_MODEL` through the same OpenAI-compatible router key (`SAB_REAL_API_KEY`) and saves the returned image as the challenger image. After approval, SimAB runs the same synthetic A/B endpoint used for ready-made tests.
 
 Smoke checks:
 

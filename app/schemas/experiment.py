@@ -35,3 +35,8 @@ class RunExperimentRequest(BaseModel):
 
 class RunVariantGenerationRequest(BaseModel):
     batch_size: int = Field(default=10, ge=1, le=50)
+
+
+class GenerateVariantMockupRequest(BaseModel):
+    selected_hypothesis: dict
+    batch_size: int = Field(default=10, ge=1, le=50)

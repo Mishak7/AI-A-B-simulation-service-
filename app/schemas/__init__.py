@@ -1,6 +1,7 @@
 from app.schemas.experiment import (
     ExperimentCreate,
     ExperimentRead,
+    GenerateVariantMockupRequest,
     RunExperimentRequest,
     RunVariantGenerationRequest,
 )
@@ -12,6 +13,7 @@ __all__ = [
     "ExperimentCreate",
     "ExperimentRead",
     "ExperimentReportRead",
+    "GenerateVariantMockupRequest",
     "PersonaProfile",
     "PersonaRead",
     "RunExperimentRequest",

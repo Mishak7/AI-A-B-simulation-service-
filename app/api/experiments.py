@@ -24,6 +24,7 @@ from app.schemas import (
     ExperimentCreate,
     ExperimentRead,
     ExperimentReportRead,
+    GenerateVariantMockupRequest,
     RunExperimentRequest,
     RunVariantGenerationRequest,
     SimulationResultRead,
@@ -109,8 +110,6 @@ async def run_experiment(
         raise HTTPException(
             status_code=400, detail="Use /run-generation for variant generation experiments"
         )
-    if not experiment.conversion_goal:
-        raise HTTPException(status_code=400, detail="conversion_goal is required")
     if not experiment.control_image_path or not experiment.challenger_image_path:
         raise HTTPException(
             status_code=400, detail="Both control and challenger images are required"
@@ -224,7 +223,6 @@ async def run_variant_generation(
             batch_size=payload.batch_size,
         )
         experiment.status = ExperimentStatus.completed
-        experiment.completed_at = datetime.now(UTC)
         await session.commit()
         logger.info(
             "Variant generation completed experiment_id=%s status=%s",
@@ -237,6 +235,64 @@ async def run_variant_generation(
         experiment.status = ExperimentStatus.failed
         await session.commit()
         raise
+
+
+@router.post("/{experiment_id}/generate-mockup")
+async def generate_variant_mockup(
+    experiment_id: int,
+    payload: GenerateVariantMockupRequest,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, object]:
+    experiment = await _get_experiment(session, experiment_id)
+    if experiment.mode != ExperimentMode.variant_generation:
+        raise HTTPException(
+            status_code=400, detail="Experiment mode must be variant_generation"
+        )
+    if not experiment.control_image_path:
+        raise HTTPException(status_code=400, detail="Control image is required")
+
+    logger.info("Variant mockup requested experiment_id=%s", experiment_id)
+    experiment.status = ExperimentStatus.running
+    await session.commit()
+    try:
+        result = await OpenClawVariantGenerator().generate_mockup(
+            experiment=experiment,
+            selected_hypothesis=payload.selected_hypothesis,
+            batch_size=payload.batch_size,
+        )
+        experiment.challenger_image_path = result["challenger_image_path"]
+        experiment.status = ExperimentStatus.completed
+        await session.commit()
+        logger.info(
+            "Variant mockup completed experiment_id=%s challenger=%s",
+            experiment_id,
+            experiment.challenger_image_path,
+        )
+        return result
+    except Exception:
+        logger.exception("Variant mockup failed experiment_id=%s", experiment_id)
+        experiment.status = ExperimentStatus.failed
+        await session.commit()
+        raise
+
+
+@router.post("/{experiment_id}/approve-generated-variant", response_model=ExperimentRead)
+async def approve_generated_variant(
+    experiment_id: int,
+    session: AsyncSession = Depends(get_session),
+) -> Experiment:
+    experiment = await _get_experiment(session, experiment_id)
+    if not experiment.control_image_path or not experiment.challenger_image_path:
+        raise HTTPException(
+            status_code=400, detail="Control and generated challenger are required"
+        )
+    experiment.mode = ExperimentMode.ab_test
+    experiment.status = ExperimentStatus.created
+    experiment.completed_at = None
+    await session.commit()
+    await session.refresh(experiment)
+    logger.info("Generated variant approved experiment_id=%s", experiment_id)
+    return experiment
 
 
 @router.get("/{experiment_id}", response_model=ExperimentRead)

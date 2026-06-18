@@ -532,6 +532,44 @@ async def index() -> str:
       padding: 14px;
       background: #fff;
     }
+    .hypothesis-list { display: grid; gap: 10px; margin-bottom: 14px; }
+    .hypothesis-option {
+      display: grid;
+      grid-template-columns: 18px 1fr;
+      gap: 8px 10px;
+      align-items: start;
+      margin: 0;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfdfc;
+      cursor: pointer;
+    }
+    .hypothesis-option input { margin: 3px 0 0; width: auto; }
+    .hypothesis-option strong,
+    .hypothesis-option span,
+    .hypothesis-option em { grid-column: 2; }
+    .hypothesis-option strong { color: #26352f; font-size: 14px; }
+    .hypothesis-option span { color: var(--muted); font-size: 13px; line-height: 1.4; }
+    .hypothesis-option em { color: #2364aa; font-size: 12px; font-style: normal; }
+    .generated-mockup {
+      width: 100%;
+      max-height: 520px;
+      object-fit: contain;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #f7faf9;
+    }
+    .mockup-approval {
+      padding: 10px;
+    }
+    .mockup-approval .generated-mockup {
+      max-height: none;
+      min-height: 640px;
+      height: min(76vh, 980px);
+      object-fit: contain;
+      object-position: top center;
+    }
     ul { margin: 0; padding-left: 18px; color: #26352f; line-height: 1.5; }
     li + li { margin-top: 7px; }
     .agents {
@@ -726,6 +764,7 @@ async def index() -> str:
     let logPoller = null;
     let progressState = null;
     let sessionLogMarker = null;
+    let lastGenerationResult = null;
 
     const labels = {
       control: "Базовый вариант",
@@ -866,7 +905,7 @@ async def index() -> str:
         subtitleNode.textContent = "Выберите сценарий слева, чтобы открыть настройки запуска.";
       } else if (generationMode) {
         setStatus("Режим генерации: загрузите контрольный макет. Цель и аудиторию можно оставить пустыми.");
-        subtitleNode.textContent = "OpenClaw-заготовка подготовит агентный запуск для генерации гипотез и варианта.";
+        subtitleNode.textContent = "OpenClaw подготовит top-гипотезы, затем выбранный вариант пройдет генерацию и critic-проверку.";
       } else {
         setStatus("Загружен пример: кредитный калькулятор с разными значениями суммы и срока по умолчанию.");
         subtitleNode.textContent = "После запуска здесь появятся голоса персон, причины выбора и рекомендации.";
@@ -971,11 +1010,11 @@ async def index() -> str:
         : recentLines;
       if (progressState.mode === "variant_generation") {
         const openClawStarted = scoped.some(line => line.includes("Variant generation requested"));
-        const openClawDone = scoped.some(line => line.includes("OpenClaw variant generation completed")) || scoped.some(line => line.includes("Variant generation stub completed"));
+        const openClawDone = scoped.some(line => line.includes("OpenClaw variant generation completed"));
         if (progressState.experimentId) setProgressStage("setup", "done", "готово");
         setProgressStage("openclaw", openClawDone ? "done" : openClawStarted ? "active" : "", openClawDone ? "готово" : openClawStarted ? "в процессе" : "ожидает");
         setProgressStage("report", openClawDone ? "done" : "", openClawDone ? "готово" : "ожидает");
-        setProgressText(openClawDone ? "Заготовка OpenClaw создана." : "Фиксируем заявку для будущего агентного рантайма.");
+        setProgressText(openClawDone ? "Гипотезы OpenClaw готовы." : "OpenClaw формирует top-гипотезы.");
         updateProgressPercent(openClawDone ? 100 : openClawStarted ? 72 : 35);
         return;
       }
@@ -1031,7 +1070,7 @@ async def index() -> str:
       if (progressState.mode === "variant_generation") {
         setProgressStage("openclaw", "done", "готово");
         setProgressStage("report", "done", "готово");
-        setProgressText("Заготовка OpenClaw создана.");
+        setProgressText("Гипотезы OpenClaw готовы.");
         updateProgressPercent(100);
         return;
       }
@@ -1204,44 +1243,137 @@ async def index() -> str:
     }
 
     function renderGenerationResult(result) {
+      lastGenerationResult = result;
       const agentResponse = result.agent_response || {};
       const hypotheses = agentResponse.hypotheses || [];
-      const variantDirection = agentResponse.variant_direction || {};
-      const runtimeLabel = result.runtime === "openclaw_gateway" ? "gateway" : result.runtime || "unknown";
-      const transportText = result.runtime === "openclaw_gateway"
-        ? "Поля и контрольная картинка отправлены в настоящий OpenClaw Gateway."
-        : "Поля и контрольная картинка отправлены в OpenClaw.";
-      winnerNode.textContent = "OpenClaw: ответ получен";
-      subtitleNode.textContent = "Локальный OpenClaw-прототип вернул гипотезы и направление варианта.";
+      winnerNode.textContent = "OpenClaw: выберите гипотезу";
+      subtitleNode.textContent = "Агенты сформировали top-3 гипотезы. Выберите одну для генерации тестового макета.";
+      const hypothesisCards = hypotheses.slice(0, 3).map((item, index) => `
+        <label class="hypothesis-option">
+          <input type="radio" name="selectedHypothesis" value="${index}" ${index === 0 ? "checked" : ""} />
+          <strong>${escapeHtml(item.title || `Гипотеза ${index + 1}`)}</strong>
+          <span>${escapeHtml(item.hypothesis || item.rationale || "")}</span>
+          ${item.proposed_change ? `<em>${escapeHtml(item.proposed_change)}</em>` : ""}
+        </label>
+      `).join("");
       reportNode.className = "report-body";
       reportNode.innerHTML = `
         <div class="block">
-          <h2>Ответ OpenClaw получен</h2>
+          <h2>Выбор гипотезы</h2>
           <p>${escapeHtml(result.message || "OpenClaw обработал контрольный макет.")}</p>
         </div>
-        <div class="metrics">
-          <div class="metric"><div class="metric-label">Experiment ID</div><div class="metric-value">${result.experiment_id}</div></div>
-          <div class="metric"><div class="metric-label">Статус</div><div class="metric-value">done</div></div>
-          <div class="metric"><div class="metric-label">Runtime</div><div class="metric-value">${runtimeLabel}</div></div>
-          <div class="metric"><div class="metric-label">Режим</div><div class="metric-value">agent</div></div>
-        </div>
         <div class="block">
-          <h3>Гипотезы</h3>
-          ${renderList(hypotheses.map(item => `${item.title}: ${item.rationale}`), "OpenClaw пока не вернул гипотезы.")}
-        </div>
-        <div class="block">
-          <h3>Направление тестового варианта</h3>
-          ${renderConclusionText(`${variantDirection.name || ""}. ${variantDirection.summary || ""}`.trim(), "Направление варианта пока не сформировано.")}
-        </div>
-        <div class="block">
-          <h3>Технический контур</h3>
-          <ul>
-            <li>${transportText}</li>
-            <li>Контракт заявки сохранен в ${escapeHtml(result.request_path || "storage")}.</li>
-            <li>Ответ OpenClaw сохранен в ${escapeHtml(result.response_path || "storage")}.</li>
-          </ul>
+          <h3>Top-3 гипотезы</h3>
+          <div class="hypothesis-list">${hypothesisCards || "OpenClaw пока не вернул гипотезы."}</div>
+          <button id="generateMockup" class="secondary" type="button" ${hypotheses.length ? "" : "disabled"}>Сгенерировать макет по выбранной гипотезе</button>
         </div>
       `;
+      const generateButton = document.getElementById("generateMockup");
+      if (generateButton) {
+        generateButton.addEventListener("click", () => {
+          const selected = document.querySelector('input[name="selectedHypothesis"]:checked');
+          const selectedIndex = Number(selected ? selected.value : 0);
+          generateMockupForHypothesis(result, hypotheses[selectedIndex] || hypotheses[0]);
+        });
+      }
+    }
+
+    async function generateMockupForHypothesis(result, selectedHypothesis) {
+      console.log("[mockup] click");
+      console.log("[mockup] result =", result);
+      console.log("[mockup] experiment_id =", result.experiment_id);
+      console.log("[mockup] id =", result.id);
+      console.log("[mockup] selectedHypothesis =", selectedHypothesis);
+      if (!selectedHypothesis) {
+        setStatus("Выберите гипотезу.", true);
+        return;
+      }
+      setStatus("Генерируем тестовый макет и запускаем critic-проверку...");
+      winnerNode.textContent = "OpenClaw: генерируем макет";
+      subtitleNode.textContent = "Mockup Generator создает вариант, Critic проверяет до 3 итераций.";
+      try {
+        const mockup = await fetch(`/experiments/${result.experiment_id}/generate-mockup`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            selected_hypothesis: selectedHypothesis,
+            batch_size: Number(document.getElementById("batch").value)
+          })
+        }).then(parseResponse);
+        renderMockupApproval(mockup);
+        setStatus("Тестовый макет готов к согласованию.");
+      } catch (error) {
+        setStatus(error.message || String(error), true);
+      }
+    }
+
+    function renderMockupApproval(result) {
+      const agentResponse = result.agent_response || {};
+      const mockup = agentResponse.mockup_generator || {};
+      winnerNode.textContent = "Макет готов";
+      subtitleNode.textContent = "Проверьте тестовый вариант и выберите дальнейшее действие.";
+      reportNode.className = "report-body";
+      reportNode.innerHTML = `
+        <div class="block mockup-approval">
+          <h2>${escapeHtml(mockup.variant_name || "Тестовый вариант")}</h2>
+          ${result.challenger_image_data_url ? `<img class="generated-mockup" src="${result.challenger_image_data_url}" alt="Сгенерированный тестовый макет" />` : "<p>Превью недоступно.</p>"}
+        </div>
+        <div class="block actions">
+          <button id="sendGeneratedToAb" type="button">Отправить на A/B-тест</button>
+          <button id="rejectGeneratedVariant" class="secondary" type="button">Отказаться</button>
+        </div>
+      `;
+      document.getElementById("sendGeneratedToAb").addEventListener("click", () => runApprovedGeneratedAb(result.experiment_id));
+      document.getElementById("rejectGeneratedVariant").addEventListener("click", () => rejectGeneratedVariant());
+    }
+
+    function rejectGeneratedVariant() {
+      setStatus("Сгенерированный макет отклонен.");
+      winnerNode.textContent = "Макет отклонен";
+      subtitleNode.textContent = "Можно выбрать другую гипотезу или изменить входные данные.";
+      if (lastGenerationResult) {
+        renderGenerationResult(lastGenerationResult);
+      }
+    }
+
+    async function runApprovedGeneratedAb(experimentId) {
+      const totalPersonas = Number(document.getElementById("personas").value);
+      const baselineLines = await logSnapshot();
+      const baselineMarker = baselineLines.length ? baselineLines[baselineLines.length - 1] : "";
+      sessionLogMarker = baselineMarker;
+      logsNode.textContent = "Лог пока пуст.";
+      renderRunningProgress(totalPersonas, baselineMarker, "ab_test");
+      progressState.experimentId = experimentId;
+      setProgressStage("setup", "done", "готово");
+      setProgressStage("upload", "done", "готово");
+      setProgressStage("personas", "active", `0 / ${totalPersonas}`);
+      setProgressText("Запускаем synthetic A/B для согласованного макета.");
+      updateProgressPercent(15);
+      startLogPolling();
+      setStatus("Отправляем сгенерированный вариант в synthetic A/B...");
+      winnerNode.textContent = "Synthetic A/B...";
+      subtitleNode.textContent = "Запускаем стандартный блок оценки готового теста.";
+      try {
+        await fetch(`/experiments/${experimentId}/approve-generated-variant`, {
+          method: "POST"
+        }).then(parseResponse);
+        const report = await fetch(`/experiments/${experimentId}/run`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            num_personas: totalPersonas,
+            batch_size: Number(document.getElementById("batch").value)
+          })
+        }).then(parseResponse);
+        finishProgress();
+        renderReport(report);
+        setStatus("A/B-отчет готов.");
+      } catch (error) {
+        failProgress();
+        setStatus(error.message || String(error), true);
+      } finally {
+        stopLogPolling();
+      }
     }
 
     setupPreview("control", "controlDrop", "controlPreview", "controlName");
@@ -1281,9 +1413,9 @@ async def index() -> str:
       startLogPolling();
       winnerNode.textContent = generationMode ? "OpenClaw..." : "Расчет...";
       subtitleNode.textContent = generationMode
-        ? "Создаем заготовку для агентной генерации варианта."
+        ? "Запускаем агентный анализ и подготовку top-гипотез."
         : "Создаем эксперимент и опрашиваем синтетические персоны.";
-      setStatus(generationMode ? "Готовим OpenClaw-заявку..." : "Запускаем эксперимент...");
+      setStatus(generationMode ? "Готовим OpenClaw-анализ..." : "Запускаем эксперимент...");
       try {
         if (defaultFilesPromise) {
           await defaultFilesPromise;
@@ -1323,9 +1455,9 @@ async def index() -> str:
         setProgressStage("upload", "done", "готово");
         if (generationMode) {
           setProgressStage("openclaw", "active", "в процессе");
-          setProgressText("Создаем заявку для будущего OpenClaw-агента.");
+          setProgressText("OpenClaw формирует top-гипотезы.");
           updateProgressPercent(35);
-          setStatus("Формируем OpenClaw-заготовку...");
+          setStatus("Формируем top-гипотезы в OpenClaw...");
           const result = await fetch(`/experiments/${created.id}/run-generation`, {
             method: "POST",
             headers: {"Content-Type": "application/json"},
