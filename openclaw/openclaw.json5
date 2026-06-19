@@ -8,9 +8,6 @@
         "simab/openai/gpt-4.1-mini": {
           alias: "simab",
         },
-        "simab/anthropic/claude-sonnet-4.6": {
-          alias: "simab",
-        },
       },
       thinkingDefault: "off",
       reasoningDefault: "off",
@@ -23,7 +20,7 @@
         model: {
           primary: "simab/openai/gpt-4.1-mini",
         },
-        skills: ["hypothesis-scorer", "mockup-generator"],
+        skills: ["hypothesis-scorer"],
         thinkingDefault: "off",
         reasoningDefault: "off",
       },
@@ -33,7 +30,6 @@
         model: {
           primary: "simab/openai/gpt-4.1-mini",
         },
-        skills: ["mockup-generator"],
       },
       {
         id: "ux_researcher",
@@ -42,24 +38,6 @@
           primary: "simab/openai/gpt-4.1-mini"
         },
         skills: ["hypothesis-scorer"],
-      },
-      {
-        id: "critic",
-        name: "Critic",
-        model: {
-          primary: "simab/openai/gpt-4.1-mini",
-        },
-        skills: ["hypothesis-scorer"],
-      },
-      {
-        id: "html_mockup_builder",
-        name: "HTML Mockup Builder",
-        model: {
-          primary: "simab/anthropic/claude-sonnet-4.6",
-        },
-        skills: ["mockup-generator"],
-        thinkingDefault: "off",
-        reasoningDefault: "off",
       },
     ],
   },
@@ -95,16 +73,6 @@
             input: ["text", "image"],
             cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
             contextWindow: 1047576,
-            contextTokens: 200000,
-            maxTokens: 8192,
-          },
-          {
-            id: "anthropic/claude-sonnet-4.6",
-            name: "Anthropic Claude Sonnet 4.6",
-            reasoning: false,
-            input: ["text", "image"],
-            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-            contextWindow: 200000,
             contextTokens: 200000,
             maxTokens: 8192,
           },

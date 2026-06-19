@@ -138,22 +138,27 @@ def test_variant_generation_calls_openclaw_gateway(tmp_path, monkeypatch) -> Non
             "next_step": "user_selects_top_hypothesis",
         }
 
-    async def fake_generate_mockup(self, experiment, selected_hypothesis, batch_size):
+    async def fake_generate_variant_image(
+        self,
+        experiment,
+        selected_hypothesis,
+        generation_prompt=None,
+    ):
         challenger_path = tmp_path / "storage" / str(experiment.id) / "challenger.svg"
         challenger_path.parent.mkdir(parents=True, exist_ok=True)
         challenger_path.write_text("<svg xmlns='http://www.w3.org/2000/svg'></svg>")
         return {
             "experiment_id": experiment.id,
-            "status": "mockup_ready",
+            "status": "variant_ready",
             "message": "ready",
             "response_path": str(tmp_path / "response.json"),
             "challenger_image_path": str(challenger_path),
-            "challenger_image_data_url": "data:image/svg+xml;base64,PHN2Zy8+",
-            "runtime": "openclaw_gateway",
+            "challenger_image_url": f"/experiments/{experiment.id}/generated-variant",
+            "runtime": "images_edit",
             "agent_response": {
-                "mockup_generator": {"variant_name": "Variant"},
-                "critic": {"final_decision": "accept", "score": 5},
-                "critic_attempts": [{"attempt": 1}],
+                "selected_hypothesis_title": selected_hypothesis.get("title", ""),
+                "generation_prompt": generation_prompt,
+                "generation": {"model": "openai/gpt-image-1"},
             },
         }
 
@@ -163,7 +168,7 @@ def test_variant_generation_calls_openclaw_gateway(tmp_path, monkeypatch) -> Non
         OpenClawVariantGenerator, "_generate_hypotheses", fake_generate_hypotheses
     )
     monkeypatch.setattr(
-        OpenClawVariantGenerator, "generate_mockup", fake_generate_mockup
+        OpenClawVariantGenerator, "generate_variant_image", fake_generate_variant_image
     )
 
     main = importlib.import_module("app.main")
@@ -207,16 +212,19 @@ def test_variant_generation_calls_openclaw_gateway(tmp_path, monkeypatch) -> Non
         assert Path(payload["request_path"]).exists()
         assert Path(payload["response_path"]).exists()
 
-        mockup = client.post(
-            f"/experiments/{experiment_id}/generate-mockup",
+        variant = client.post(
+            f"/experiments/{experiment_id}/generate-variant-image",
             json={
                 "selected_hypothesis": payload["agent_response"]["hypotheses"][0],
-                "batch_size": 3,
+                "generation_prompt": "Change only the CTA label",
             },
         )
-        assert mockup.status_code == 200
-        assert mockup.json()["status"] == "mockup_ready"
-        assert Path(mockup.json()["challenger_image_path"]).exists()
+        assert variant.status_code == 200
+        assert variant.json()["status"] == "variant_ready"
+        assert Path(variant.json()["challenger_image_path"]).exists()
+        assert variant.json()["runtime"] == "images_edit"
+        preview = client.get(variant.json()["challenger_image_url"])
+        assert preview.status_code == 200
 
         ab_run = client.post(
             f"/experiments/{experiment_id}/run",

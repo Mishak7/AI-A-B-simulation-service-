@@ -16,6 +16,15 @@ class Settings(BaseSettings):
     real_model: str = "google/gemini-2.5-flash"
     real_timeout_seconds: float = 90.0
     real_max_retries: int = 3
+    image_api_key: str | None = None
+    image_base_url: str = "https://api.vsellm.ru/v1"
+    image_model: str = "google/gemini-3-pro-image-preview"
+    image_size: str = "1536x1024"
+    image_quality: str = "high"
+    image_input_fidelity: str = "high"
+    image_edit_endpoint_path: str = "/images/edits"
+    image_timeout_seconds: float = 180.0
+    image_max_download_bytes: int = 50_000_000
     gemini_api_key: str | None = None
     gemini_model: str | None = None
     log_file: Path = Path("app/storage/simab.log")
@@ -26,6 +35,14 @@ class Settings(BaseSettings):
     openclaw_gateway_token: str | None = None
     openclaw_model: str = "openclaw/product_manager"
     openclaw_timeout_seconds: float = 120.0
+
+    @property
+    def effective_image_api_key(self) -> str | None:
+        return self.image_api_key or self.real_api_key
+
+    @property
+    def image_size_is_explicit(self) -> bool:
+        return self.image_size.lower() != "auto" and "image_size" in self.model_fields_set
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="SAB_")
 

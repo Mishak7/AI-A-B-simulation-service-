@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -24,7 +25,7 @@ from app.schemas import (
     ExperimentCreate,
     ExperimentRead,
     ExperimentReportRead,
-    GenerateVariantMockupRequest,
+    GenerateVariantImageRequest,
     RunExperimentRequest,
     RunVariantGenerationRequest,
     SimulationResultRead,
@@ -237,10 +238,10 @@ async def run_variant_generation(
         raise
 
 
-@router.post("/{experiment_id}/generate-mockup")
-async def generate_variant_mockup(
+@router.post("/{experiment_id}/generate-variant-image")
+async def generate_variant_image(
     experiment_id: int,
-    payload: GenerateVariantMockupRequest,
+    payload: GenerateVariantImageRequest,
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, object]:
     experiment = await _get_experiment(session, experiment_id)
@@ -251,26 +252,26 @@ async def generate_variant_mockup(
     if not experiment.control_image_path:
         raise HTTPException(status_code=400, detail="Control image is required")
 
-    logger.info("Variant mockup requested experiment_id=%s", experiment_id)
+    logger.info("Variant image requested experiment_id=%s", experiment_id)
     experiment.status = ExperimentStatus.running
     await session.commit()
     try:
-        result = await OpenClawVariantGenerator().generate_mockup(
+        result = await OpenClawVariantGenerator().generate_variant_image(
             experiment=experiment,
             selected_hypothesis=payload.selected_hypothesis,
-            batch_size=payload.batch_size,
+            generation_prompt=payload.generation_prompt,
         )
         experiment.challenger_image_path = result["challenger_image_path"]
         experiment.status = ExperimentStatus.completed
         await session.commit()
         logger.info(
-            "Variant mockup completed experiment_id=%s challenger=%s",
+            "Variant image completed experiment_id=%s challenger=%s",
             experiment_id,
             experiment.challenger_image_path,
         )
         return result
     except Exception:
-        logger.exception("Variant mockup failed experiment_id=%s", experiment_id)
+        logger.exception("Variant image failed experiment_id=%s", experiment_id)
         experiment.status = ExperimentStatus.failed
         await session.commit()
         raise
@@ -293,6 +294,20 @@ async def approve_generated_variant(
     await session.refresh(experiment)
     logger.info("Generated variant approved experiment_id=%s", experiment_id)
     return experiment
+
+
+@router.get("/{experiment_id}/generated-variant")
+async def get_generated_variant(
+    experiment_id: int,
+    session: AsyncSession = Depends(get_session),
+) -> FileResponse:
+    experiment = await _get_experiment(session, experiment_id)
+    if not experiment.challenger_image_path:
+        raise HTTPException(status_code=404, detail="Generated variant not found")
+    image_path = Path(experiment.challenger_image_path)
+    if not image_path.is_file():
+        raise HTTPException(status_code=404, detail="Generated variant file not found")
+    return FileResponse(image_path)
 
 
 @router.get("/{experiment_id}", response_model=ExperimentRead)

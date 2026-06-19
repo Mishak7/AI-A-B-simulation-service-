@@ -552,7 +552,7 @@ async def index() -> str:
     .hypothesis-option strong { color: #26352f; font-size: 14px; }
     .hypothesis-option span { color: var(--muted); font-size: 13px; line-height: 1.4; }
     .hypothesis-option em { color: #2364aa; font-size: 12px; font-style: normal; }
-    .generated-mockup {
+    .generated-variant {
       width: 100%;
       max-height: 520px;
       object-fit: contain;
@@ -560,10 +560,10 @@ async def index() -> str:
       border-radius: 8px;
       background: #f7faf9;
     }
-    .mockup-approval {
+    .variant-approval {
       padding: 10px;
     }
-    .mockup-approval .generated-mockup {
+    .variant-approval .generated-variant {
       max-height: none;
       min-height: 640px;
       height: min(76vh, 980px);
@@ -905,7 +905,7 @@ async def index() -> str:
         subtitleNode.textContent = "Выберите сценарий слева, чтобы открыть настройки запуска.";
       } else if (generationMode) {
         setStatus("Режим генерации: загрузите контрольный макет. Цель и аудиторию можно оставить пустыми.");
-        subtitleNode.textContent = "OpenClaw подготовит top-гипотезы, затем выбранный вариант пройдет генерацию и critic-проверку.";
+        subtitleNode.textContent = "OpenClaw подготовит top-гипотезы, затем image-модель применит выбранное изменение к контролю.";
       } else {
         setStatus("Загружен пример: кредитный калькулятор с разными значениями суммы и срока по умолчанию.");
         subtitleNode.textContent = "После запуска здесь появятся голоса персон, причины выбора и рекомендации.";
@@ -1265,58 +1265,52 @@ async def index() -> str:
         <div class="block">
           <h3>Top-3 гипотезы</h3>
           <div class="hypothesis-list">${hypothesisCards || "OpenClaw пока не вернул гипотезы."}</div>
-          <button id="generateMockup" class="secondary" type="button" ${hypotheses.length ? "" : "disabled"}>Сгенерировать макет по выбранной гипотезе</button>
+          <button id="generateVariantImage" class="secondary" type="button" ${hypotheses.length ? "" : "disabled"}>Сгенерировать тестовый вариант</button>
         </div>
       `;
-      const generateButton = document.getElementById("generateMockup");
+      const generateButton = document.getElementById("generateVariantImage");
       if (generateButton) {
         generateButton.addEventListener("click", () => {
           const selected = document.querySelector('input[name="selectedHypothesis"]:checked');
           const selectedIndex = Number(selected ? selected.value : 0);
-          generateMockupForHypothesis(result, hypotheses[selectedIndex] || hypotheses[0]);
+          generateImageForHypothesis(result, hypotheses[selectedIndex] || hypotheses[0]);
         });
       }
     }
 
-    async function generateMockupForHypothesis(result, selectedHypothesis) {
-      console.log("[mockup] click");
-      console.log("[mockup] result =", result);
-      console.log("[mockup] experiment_id =", result.experiment_id);
-      console.log("[mockup] id =", result.id);
-      console.log("[mockup] selectedHypothesis =", selectedHypothesis);
+    async function generateImageForHypothesis(result, selectedHypothesis) {
       if (!selectedHypothesis) {
         setStatus("Выберите гипотезу.", true);
         return;
       }
-      setStatus("Генерируем тестовый макет и запускаем critic-проверку...");
-      winnerNode.textContent = "OpenClaw: генерируем макет";
-      subtitleNode.textContent = "Mockup Generator создает вариант, Critic проверяет до 3 итераций.";
+      setStatus("Генерируем тестовый вариант по контрольному макету...");
+      winnerNode.textContent = "Генерируем вариант";
+      subtitleNode.textContent = "openai/gpt-image-1 применяет только выбранную гипотезу.";
       try {
-        const mockup = await fetch(`/experiments/${result.experiment_id}/generate-mockup`, {
+        const variant = await fetch(`/experiments/${result.experiment_id}/generate-variant-image`, {
           method: "POST",
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({
             selected_hypothesis: selectedHypothesis,
-            batch_size: Number(document.getElementById("batch").value)
+            generation_prompt: selectedHypothesis.generation_prompt || null
           })
         }).then(parseResponse);
-        renderMockupApproval(mockup);
+        renderVariantApproval(variant);
         setStatus("Тестовый макет готов к согласованию.");
       } catch (error) {
         setStatus(error.message || String(error), true);
       }
     }
 
-    function renderMockupApproval(result) {
+    function renderVariantApproval(result) {
       const agentResponse = result.agent_response || {};
-      const mockup = agentResponse.mockup_generator || {};
       winnerNode.textContent = "Макет готов";
       subtitleNode.textContent = "Проверьте тестовый вариант и выберите дальнейшее действие.";
       reportNode.className = "report-body";
       reportNode.innerHTML = `
-        <div class="block mockup-approval">
-          <h2>${escapeHtml(mockup.variant_name || "Тестовый вариант")}</h2>
-          ${result.challenger_image_data_url ? `<img class="generated-mockup" src="${result.challenger_image_data_url}" alt="Сгенерированный тестовый макет" />` : "<p>Превью недоступно.</p>"}
+        <div class="block variant-approval">
+          <h2>${escapeHtml(agentResponse.selected_hypothesis_title || "Тестовый вариант")}</h2>
+          ${result.challenger_image_url ? `<img class="generated-variant" src="${result.challenger_image_url}" alt="Сгенерированный тестовый вариант" />` : "<p>Превью недоступно.</p>"}
         </div>
         <div class="block actions">
           <button id="sendGeneratedToAb" type="button">Отправить на A/B-тест</button>

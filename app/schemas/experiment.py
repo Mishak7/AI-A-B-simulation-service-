@@ -37,6 +37,6 @@ class RunVariantGenerationRequest(BaseModel):
     batch_size: int = Field(default=10, ge=1, le=50)
 
 
-class GenerateVariantMockupRequest(BaseModel):
+class GenerateVariantImageRequest(BaseModel):
     selected_hypothesis: dict
-    batch_size: int = Field(default=10, ge=1, le=50)
+    generation_prompt: str | None = Field(default=None, max_length=4000)

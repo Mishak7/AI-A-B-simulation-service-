@@ -62,8 +62,14 @@ The `web` service calls OpenClaw through:
 ```env
 SAB_OPENCLAW_BASE_URL=http://openclaw-gateway:18789
 SAB_OPENCLAW_MODEL=openclaw/product_manager
-SAB_OPENCLAW_IMAGE_MODEL=google/gemini-2.5-flash-image
 SAB_OPENCLAW_GATEWAY_TOKEN=<same value as OPENCLAW_GATEWAY_TOKEN when auth is enabled>
+SAB_IMAGE_API_KEY=<vsellm API key; falls back to SAB_REAL_API_KEY>
+SAB_IMAGE_BASE_URL=https://api.vsellm.ru/v1
+SAB_IMAGE_MODEL=openai/gpt-image-1
+SAB_IMAGE_SIZE=1536x1024
+SAB_IMAGE_QUALITY=high
+SAB_IMAGE_INPUT_FIDELITY=high
+SAB_IMAGE_EDIT_ENDPOINT_PATH=/images/edits
 ```
 
 Compose uses `simab-dev-openclaw-token` as a local fallback token because OpenClaw refuses to bind the Gateway to `0.0.0.0` without auth. Set `OPENCLAW_GATEWAY_TOKEN` in `.env` to replace it.
@@ -103,9 +109,7 @@ Current empty agent and OpenClaw-native skill scaffolds:
 openclaw/agents/product_manager.md
 openclaw/agents/ux_designer.md
 openclaw/agents/ux_researcher.md
-openclaw/agents/critic.md
 openclaw/skills/hypothesis_scorer/SKILL.md
-openclaw/skills/mockup_generator/SKILL.md
 ```
 
 Variant generation uses this OpenClaw pipeline:
@@ -119,16 +123,16 @@ hypothesis_scorer/SKILL.md
         ↓
 user selects one of the top 3 hypotheses
         ↓
-mockup_generator/SKILL.md
+the control image + hypothesis + strict minimal-change prompt
         ↓
-critic.md, up to 3 revise attempts
+openai/gpt-image-1 image edit through api.vsellm.ru
         ↓
 user approves generated challenger
         ↓
 ready for synthetic A/B
 ```
 
-The `mockup_generator` step uses `SAB_OPENCLAW_IMAGE_MODEL` through the same OpenAI-compatible router key (`SAB_REAL_API_KEY`) and saves the returned image as the challenger image. After approval, SimAB runs the same synthetic A/B endpoint used for ready-made tests.
+OpenClaw is used only for hypothesis discussion and ranking. After the user selects a hypothesis, the control screenshot is sent directly as multipart `image` to `{SAB_IMAGE_BASE_URL}{SAB_IMAGE_EDIT_ENDPOINT_PATH}` with a short prompt containing only the exact requested change and a minimal preservation constraint. There is no visual planner, overlay renderer, crop router, or image generation through chat completions. The image endpoint may return either `data[0].b64_json` or `data[0].url`; both are saved as the challenger. Request, response-shape, and output-path events are logged without API keys or image payloads.
 
 Smoke checks:
 
@@ -161,6 +165,7 @@ In the `openclaw-gateway` logs, use the Gateway's own startup, model, auth, and 
 - `POST /experiments/{id}/upload` uploads `control` and `challenger` image files.
 - `POST /experiments/{id}/run` runs the simulation.
 - `POST /experiments/{id}/run-generation` sends the experiment fields and control image to OpenClaw.
+- `POST /experiments/{id}/generate-variant-image` generates a challenger from the control image and selected hypothesis.
 - `GET /experiments/{id}` returns experiment status.
 - `GET /experiments/{id}/report` returns the final report.
 
