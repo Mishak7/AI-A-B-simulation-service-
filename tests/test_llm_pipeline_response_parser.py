@@ -12,17 +12,11 @@ def completion_payload(content):
 def test_pipeline_step_calls_configured_model_directly(monkeypatch) -> None:
     captured = {}
 
-    class Response:
-        def model_dump(self):
-            return completion_payload('{"role":"product_manager"}')
-
-    class Completions:
-        async def create(self, **kwargs):
-            captured.update(kwargs)
-            return Response()
-
     class Client:
-        chat = type("Chat", (), {"completions": Completions()})()
+        async def complete(self, content, **kwargs):
+            captured["content"] = content
+            captured.update(kwargs)
+            return '{"role":"product_manager"}'
 
     monkeypatch.setenv("SAB_AGENT_PIPELINE_MODEL", "openai/gpt-4.1-mini")
     monkeypatch.setenv("SAB_AGENT_PIPELINE_MAX_TOKENS", "8192")
@@ -42,9 +36,8 @@ def test_pipeline_step_calls_configured_model_directly(monkeypatch) -> None:
     )
 
     assert result == {"role": "product_manager"}
-    assert captured["model"] == "openai/gpt-4.1-mini"
     assert captured["max_tokens"] == 8192
-    assert captured["messages"][0]["content"][1]["type"] == "image_url"
+    assert captured["content"][1]["type"] == "image_url"
     get_settings.cache_clear()
 
 

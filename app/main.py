@@ -1285,7 +1285,7 @@ async def index() -> str:
       }
       setStatus("Генерируем тестовый вариант по контрольному макету...");
       winnerNode.textContent = "Генерируем вариант";
-      subtitleNode.textContent = "openai/gpt-image-1 применяет только выбранную гипотезу.";
+      subtitleNode.textContent = "Модель генерации изображений применяет только выбранную гипотезу.";
       try {
         const variant = await fetch(`/experiments/${result.experiment_id}/generate-variant-image`, {
           method: "POST",

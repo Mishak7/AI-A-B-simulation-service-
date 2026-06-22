@@ -12,10 +12,21 @@ class Settings(BaseSettings):
     llm_provider: str = "mock"
     winner_threshold: float = 0.10
     real_api_key: str | None = None
-    real_base_url: str = "https://api.vsellm.ru/v1"
-    real_model: str = "google/gemini-2.5-flash"
+    real_base_url: str = "https://45.9.24.84/v1"
+    real_model: str = "Qwen3.5-397B-A17B-FP8"
     real_timeout_seconds: float = 90.0
     real_max_retries: int = 3
+    qwen_api_key: str | None = None
+    qwen_base_url: str = "https://45.9.24.84/v1"
+    qwen_model: str = "Qwen3.5-397B-A17B-FP8"
+    qwen_max_tokens: int = 16_384
+    qwen_max_retries: int = 8
+    qwen_initial_concurrency: int = 2
+    qwen_max_concurrency: int = 4
+    qwen_increase_after_successes: int = 8
+    qwen_min_interval_seconds: float = 0.25
+    qwen_max_interval_seconds: float = 2.0
+    qwen_max_retry_delay_seconds: float = 60.0
     image_api_key: str | None = None
     image_base_url: str = "https://api.vsellm.ru/v1"
     image_model: str = "google/gemini-3-pro-image-preview"
@@ -31,8 +42,8 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_max_bytes: int = 2_000_000
     log_backup_count: int = 3
-    agent_pipeline_model: str = "openai/gpt-4.1-mini"
-    agent_pipeline_max_tokens: int = 8_192
+    agent_pipeline_model: str = "Qwen3.5-397B-A17B-FP8"
+    agent_pipeline_max_tokens: int = 16_384
     agent_pipeline_timeout_seconds: float = 120.0
 
     @property

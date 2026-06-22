@@ -47,15 +47,26 @@ source .venv/bin/activate
 uvicorn app.main:app --reload
 ```
 
-Configure the OpenAI-compatible text/vision model and image-edit model in `.env`:
+Configure the direct Qwen HTTP endpoint and the separate image-edit model in `.env`:
 
 ```env
 SAB_LLM_PROVIDER=real
 SAB_REAL_API_KEY=...
-SAB_REAL_BASE_URL=https://api.vsellm.ru/v1
-SAB_REAL_MODEL=google/gemini-2.5-flash
-SAB_AGENT_PIPELINE_MODEL=openai/gpt-4.1-mini
-SAB_AGENT_PIPELINE_MAX_TOKENS=8192
+SAB_REAL_BASE_URL=https://45.9.24.84/v1
+SAB_REAL_MODEL=Qwen3.5-397B-A17B-FP8
+SAB_QWEN_API_KEY=...
+SAB_QWEN_BASE_URL=https://45.9.24.84/v1
+SAB_QWEN_MODEL=Qwen3.5-397B-A17B-FP8
+SAB_QWEN_MAX_TOKENS=16384
+SAB_QWEN_MAX_RETRIES=8
+SAB_QWEN_INITIAL_CONCURRENCY=2
+SAB_QWEN_MAX_CONCURRENCY=4
+SAB_QWEN_INCREASE_AFTER_SUCCESSES=8
+SAB_QWEN_MIN_INTERVAL_SECONDS=0.25
+SAB_QWEN_MAX_INTERVAL_SECONDS=2.0
+SAB_QWEN_MAX_RETRY_DELAY_SECONDS=60
+SAB_AGENT_PIPELINE_MODEL=Qwen3.5-397B-A17B-FP8
+SAB_AGENT_PIPELINE_MAX_TOKENS=16384
 SAB_AGENT_PIPELINE_TIMEOUT_SECONDS=120
 SAB_IMAGE_API_KEY=...
 SAB_IMAGE_BASE_URL=https://api.vsellm.ru/v1
@@ -88,14 +99,16 @@ user selects one of the top 3 hypotheses
         ↓
 the control image + hypothesis + strict minimal-change prompt
         ↓
-openai/gpt-image-1 image edit through api.vsellm.ru
+the configured image model edits the screenshot through api.vsellm.ru
         ↓
 user approves generated challenger
         ↓
 ready for synthetic A/B
 ```
 
-The three specialist calls receive the same control screenshot independently. Their structured JSON outputs are passed to the scorer call, exactly as defined in the Markdown instructions. After the user selects a hypothesis, the control screenshot is sent directly as multipart `image` to `{SAB_IMAGE_BASE_URL}{SAB_IMAGE_EDIT_ENDPOINT_PATH}` with the existing strict minimal-change prompt. The response may contain either `data[0].b64_json` or `data[0].url`; both are saved as the challenger.
+The three specialist calls receive the same control screenshot independently through direct HTTP requests to Qwen. Their structured JSON outputs are passed to the scorer call, exactly as defined in the Markdown instructions. The regular A/B comparison and visual QA use the same Qwen endpoint. No OpenAI SDK is involved. After the user selects a hypothesis, the control screenshot is sent separately to `{SAB_IMAGE_BASE_URL}{SAB_IMAGE_EDIT_ENDPOINT_PATH}` with the existing strict minimal-change prompt, so the current image-generation model and settings remain unchanged.
+
+The Qwen limiter starts with two concurrent requests and a 0.25-second interval. After eight successful responses it adds one request slot, up to four. A `429` immediately halves concurrency, increases the interval, and starts a cooldown; successful traffic then restores speed gradually. Temporary `429` and `5xx` responses are also retried with exponential backoff, honoring a server-provided `Retry-After` value.
 
 ## API
 
@@ -144,9 +157,9 @@ The default provider is `mock`, configured by:
 SAB_LLM_PROVIDER=mock
 ```
 
-The mock client generates deterministic synthetic personas and verdicts so the pipeline works offline. `app/llm/real_client.py` is a placeholder for wiring a real LLM/VLM provider later behind the same interface.
+The mock client generates deterministic synthetic personas and verdicts so the pipeline works offline. The real client sends direct HTTP requests to the configured Qwen server.
 
-To use a real model through an OpenAI-compatible gateway, for example `vsellm.ru`:
+Install the dependencies:
 
 ```bash
 pip install -r requirements.txt
@@ -156,23 +169,12 @@ Set:
 
 ```env
 SAB_LLM_PROVIDER=real
-SAB_REAL_API_KEY=your_gateway_api_key
-SAB_REAL_BASE_URL=https://api.vsellm.ru/v1
-SAB_REAL_MODEL=google/gemini-2.5-flash
+SAB_QWEN_API_KEY=your_qwen_api_key
+SAB_QWEN_BASE_URL=https://45.9.24.84/v1
+SAB_QWEN_MODEL=Qwen3.5-397B-A17B-FP8
 ```
 
-This matches the usual OpenAI-compatible client shape:
-
-```python
-from openai import OpenAI
-
-client = OpenAI(
-    api_key="your-api-key",
-    base_url="https://api.vsellm.ru/v1",
-)
-```
-
-The real client lives in `app/llm/real_client.py` and uses the same `LLMClient` interface as the mock client, so the API endpoints and orchestration services do not change.
+`app/llm/http_chat_client.py` performs a normal authenticated `POST` to `/chat/completions`; the OpenAI SDK is not used. `app/llm/real_client.py` keeps the same internal `LLMClient` interface, so API endpoints and orchestration services do not change.
 
 ## Tests
 

@@ -1,4 +1,3 @@
-import asyncio
 import base64
 import json
 import logging
@@ -9,6 +8,7 @@ from typing import Any
 
 from app.config import get_settings
 from app.llm.base import LLMClient
+from app.llm.http_chat_client import HTTPChatClient
 from app.schemas.persona import PersonaProfile
 from app.schemas.simulation import SimulationVerdict, VisualAssessment
 
@@ -16,37 +16,38 @@ logger = logging.getLogger(__name__)
 
 
 class RealLLMClient(LLMClient):
-    """OpenAI-compatible client for third-party LLM gateways.
+    """Direct HTTP client for the configured Qwen text/vision endpoint.
 
-    Example gateway config:
-    SAB_REAL_BASE_URL=https://api.vsellm.ru/v1
-    SAB_REAL_MODEL=google/gemini-2.5-flash
+    Example config:
+    SAB_QWEN_BASE_URL=https://45.9.24.84/v1
+    SAB_QWEN_MODEL=Qwen3.5-397B-A17B-FP8
     """
 
     def __init__(self) -> None:
         settings = get_settings()
-        api_key = settings.real_api_key or settings.gemini_api_key
-        model = settings.real_model or settings.gemini_model or "google/gemini-2.5-flash"
+        api_key = settings.qwen_api_key
+        model = settings.qwen_model
 
         if not api_key:
-            raise ValueError("SAB_REAL_API_KEY is required when SAB_LLM_PROVIDER=real")
+            raise ValueError("SAB_QWEN_API_KEY is required when SAB_LLM_PROVIDER=real")
 
-        try:
-            from openai import APIConnectionError, APITimeoutError, AsyncOpenAI, RateLimitError
-        except ImportError as exc:
-            raise ImportError("Install openai to use RealLLMClient: pip install openai") from exc
-
-        self.client = AsyncOpenAI(
+        self.client = HTTPChatClient(
             api_key=api_key,
-            base_url=settings.real_base_url,
-            timeout=settings.real_timeout_seconds,
-            max_retries=0,
+            base_url=settings.qwen_base_url,
+            model=model,
+            timeout_seconds=settings.real_timeout_seconds,
+            max_retries=settings.qwen_max_retries,
+            initial_concurrency=settings.qwen_initial_concurrency,
+            max_concurrency=settings.qwen_max_concurrency,
+            increase_after_successes=settings.qwen_increase_after_successes,
+            min_interval_seconds=settings.qwen_min_interval_seconds,
+            max_interval_seconds=settings.qwen_max_interval_seconds,
+            max_retry_delay_seconds=settings.qwen_max_retry_delay_seconds,
         )
         self.model = model
-        self.base_url = settings.real_base_url
+        self.base_url = settings.qwen_base_url
         self.timeout_seconds = settings.real_timeout_seconds
-        self.max_retries = settings.real_max_retries
-        self.retryable_errors = (APITimeoutError, APIConnectionError, RateLimitError)
+        self.max_retries = settings.qwen_max_retries
         logger.info(
             "Initialized RealLLMClient base_url=%s model=%s timeout_seconds=%s max_retries=%s",
             self.base_url,
@@ -128,51 +129,16 @@ class RealLLMClient(LLMClient):
         return await self._chat_content(prompt)
 
     async def _chat_content(self, content: str | list[dict[str, Any]]) -> str:
-        for attempt in range(1, self.max_retries + 2):
-            try:
-                logger.debug(
-                    "Sending chat.completions request model=%s base_url=%s attempt=%s",
-                    self.model,
-                    self.base_url,
-                    attempt,
-                )
-                response = await self.client.chat.completions.create(
-                    model=self.model,
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": content,
-                        }
-                    ],
-                    temperature=0.2,
-                )
-                message = response.choices[0].message.content
-                if not message:
-                    raise ValueError("LLM returned an empty response")
-                return message
-            except self.retryable_errors as exc:
-                if attempt > self.max_retries:
-                    logger.exception(
-                        "LLM request failed after retries model=%s base_url=%s attempts=%s error=%s",
-                        self.model,
-                        self.base_url,
-                        attempt,
-                        exc.__class__.__name__,
-                    )
-                    raise
-                delay = min(2 ** (attempt - 1), 8)
-                logger.warning(
-                    "LLM request failed model=%s base_url=%s attempt=%s/%s error=%s; retrying in %ss",
-                    self.model,
-                    self.base_url,
-                    attempt,
-                    self.max_retries + 1,
-                    exc.__class__.__name__,
-                    delay,
-                )
-                await asyncio.sleep(delay)
-
-        raise RuntimeError("LLM request retry loop exited unexpectedly")
+        logger.debug(
+            "Sending direct HTTP chat request model=%s base_url=%s",
+            self.model,
+            self.base_url,
+        )
+        return await self.client.complete(
+            content,
+            temperature=0.2,
+            max_tokens=get_settings().qwen_max_tokens,
+        )
 
     @staticmethod
     def _image_content_part(image_path: str) -> dict[str, Any]:

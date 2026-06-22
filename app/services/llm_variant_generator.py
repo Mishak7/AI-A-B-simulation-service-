@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from app.config import get_settings
+from app.llm.http_chat_client import HTTPChatClient
 from app.models import Experiment
 from app.services.image_edit_client import ImageEditClient
 
@@ -38,8 +39,8 @@ class LLMVariantGenerator:
             "created_at": datetime.now(UTC).isoformat(),
             "integration": {
                 "runtime": "llm_pipeline",
-                "transport": "direct_openai_compatible_chat_completions",
-                "base_url": settings.real_base_url,
+                "transport": "direct_http_chat_completions",
+                "base_url": settings.qwen_base_url,
                 "model": settings.agent_pipeline_model,
             },
         }
@@ -140,43 +141,46 @@ class LLMVariantGenerator:
 
     async def _generate_hypotheses(self, payload: dict[str, Any]) -> dict[str, Any]:
         settings = get_settings()
-        api_key = settings.real_api_key or settings.gemini_api_key
+        api_key = settings.qwen_api_key
         if not api_key:
-            raise ValueError("SAB_REAL_API_KEY is required for agent discussion")
-        try:
-            from openai import AsyncOpenAI
-        except ImportError as exc:
-            raise ImportError("Install openai to run the LLM agent pipeline") from exc
+            raise ValueError("SAB_QWEN_API_KEY is required for agent discussion")
 
-        async with AsyncOpenAI(
+        client = HTTPChatClient(
             api_key=api_key,
-            base_url=settings.real_base_url,
-            timeout=settings.agent_pipeline_timeout_seconds,
-            max_retries=settings.real_max_retries,
-        ) as client:
-            pm_output = await self._call_pipeline_step(
-                client, payload, "product_manager",
-                self._read_prompt_file(self.agent_prompt_files["product_manager"]), {}, True,
-            )
-            ux_designer_output = await self._call_pipeline_step(
-                client, payload, "ux_designer",
-                self._read_prompt_file(self.agent_prompt_files["ux_designer"]), {}, True,
-            )
-            ux_researcher_output = await self._call_pipeline_step(
-                client, payload, "ux_researcher",
-                self._read_prompt_file(self.agent_prompt_files["ux_researcher"]), {}, True,
-            )
-            scorer_output = await self._call_pipeline_step(
-                client, payload, "hypothesis_scorer",
-                self._read_prompt_file(self.skill_prompt_files["hypothesis_scorer"]),
-                {
-                    "pm_output": pm_output,
-                    "ux_designer_output": ux_designer_output,
-                    "ux_researcher_output": ux_researcher_output,
-                    "top_n": 3,
-                },
-                False,
-            )
+            base_url=settings.qwen_base_url,
+            model=settings.agent_pipeline_model,
+            timeout_seconds=settings.agent_pipeline_timeout_seconds,
+            max_retries=settings.qwen_max_retries,
+            initial_concurrency=settings.qwen_initial_concurrency,
+            max_concurrency=settings.qwen_max_concurrency,
+            increase_after_successes=settings.qwen_increase_after_successes,
+            min_interval_seconds=settings.qwen_min_interval_seconds,
+            max_interval_seconds=settings.qwen_max_interval_seconds,
+            max_retry_delay_seconds=settings.qwen_max_retry_delay_seconds,
+        )
+        pm_output = await self._call_pipeline_step(
+            client, payload, "product_manager",
+            self._read_prompt_file(self.agent_prompt_files["product_manager"]), {}, True,
+        )
+        ux_designer_output = await self._call_pipeline_step(
+            client, payload, "ux_designer",
+            self._read_prompt_file(self.agent_prompt_files["ux_designer"]), {}, True,
+        )
+        ux_researcher_output = await self._call_pipeline_step(
+            client, payload, "ux_researcher",
+            self._read_prompt_file(self.agent_prompt_files["ux_researcher"]), {}, True,
+        )
+        scorer_output = await self._call_pipeline_step(
+            client, payload, "hypothesis_scorer",
+            self._read_prompt_file(self.skill_prompt_files["hypothesis_scorer"]),
+            {
+                "pm_output": pm_output,
+                "ux_designer_output": ux_designer_output,
+                "ux_researcher_output": ux_researcher_output,
+                "top_n": 3,
+            },
+            False,
+        )
         return self._build_pipeline_response(
             pm_output=pm_output,
             ux_designer_output=ux_designer_output,
@@ -204,9 +208,8 @@ class LLMVariantGenerator:
             settings.agent_pipeline_model,
             include_image,
         )
-        response = await client.chat.completions.create(
-            model=settings.agent_pipeline_model,
-            messages=[{"role": "user", "content": content}],
+        response_text = await client.complete(
+            content,
             temperature=0.2,
             max_tokens=settings.agent_pipeline_max_tokens,
         )
@@ -215,9 +218,7 @@ class LLMVariantGenerator:
             if step == "hypothesis_scorer"
             else None
         )
-        result = self._parse_chat_completion_payload(
-            response.model_dump(), expected_keys=expected_keys
-        )
+        result = self._parse_chat_content(response_text, expected_keys=expected_keys)
         logger.info("LLM pipeline step completed step=%s", step)
         return result
 
@@ -390,6 +391,16 @@ class LLMVariantGenerator:
                 len(objects),
             )
         return result
+
+    @staticmethod
+    def _parse_chat_content(
+        content: str,
+        expected_keys: set[str] | None = None,
+    ) -> dict[str, Any]:
+        return LLMVariantGenerator._parse_chat_completion_payload(
+            {"choices": [{"message": {"content": content}}]},
+            expected_keys=expected_keys,
+        )
 
     @staticmethod
     def _decode_json_objects(text: str) -> list[dict[str, Any]]:

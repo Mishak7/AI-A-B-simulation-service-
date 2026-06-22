@@ -13,6 +13,7 @@ from sqlalchemy.orm import selectinload
 from app.config import get_settings
 from app.db.session import get_session
 from app.llm.factory import get_llm_client
+from app.llm.http_chat_client import ChatServiceUnavailableError
 from app.models import (
     Experiment,
     ExperimentMode,
@@ -182,6 +183,14 @@ async def run_experiment(
             report.experiment_id,
         )
         return _report_to_schema(report, results)
+    except ChatServiceUnavailableError as exc:
+        logger.warning("Qwen unavailable experiment_id=%s error=%s", experiment_id, exc)
+        experiment.status = ExperimentStatus.failed
+        await session.commit()
+        raise HTTPException(
+            status_code=503,
+            detail="Qwen временно перегружен. Повторите запуск позже.",
+        ) from exc
     except Exception:
         logger.exception("Run failed experiment_id=%s", experiment_id)
         experiment.status = ExperimentStatus.failed
@@ -231,6 +240,14 @@ async def run_variant_generation(
             result["status"],
         )
         return result
+    except ChatServiceUnavailableError as exc:
+        logger.warning("Qwen unavailable experiment_id=%s error=%s", experiment_id, exc)
+        experiment.status = ExperimentStatus.failed
+        await session.commit()
+        raise HTTPException(
+            status_code=503,
+            detail="Qwen временно перегружен. Повторите запуск позже.",
+        ) from exc
     except Exception:
         logger.exception("Variant generation failed experiment_id=%s", experiment_id)
         experiment.status = ExperimentStatus.failed
