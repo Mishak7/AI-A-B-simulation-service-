@@ -31,7 +31,7 @@ from app.schemas import (
     SimulationResultRead,
 )
 from app.services.aggregator import Aggregator
-from app.services.openclaw_variant_generator import OpenClawVariantGenerator
+from app.services.llm_variant_generator import LLMVariantGenerator
 from app.services.persona_generator import PersonaGenerator
 from app.services.prompt_renderer import PromptRenderer
 from app.services.report_generator import ReportGenerator
@@ -219,7 +219,7 @@ async def run_variant_generation(
     await session.commit()
 
     try:
-        result = await OpenClawVariantGenerator().start(
+        result = await LLMVariantGenerator().start(
             experiment=experiment,
             batch_size=payload.batch_size,
         )
@@ -256,7 +256,7 @@ async def generate_variant_image(
     experiment.status = ExperimentStatus.running
     await session.commit()
     try:
-        result = await OpenClawVariantGenerator().generate_variant_image(
+        result = await LLMVariantGenerator().generate_variant_image(
             experiment=experiment,
             selected_hypothesis=payload.selected_hypothesis,
             generation_prompt=payload.generation_prompt,

@@ -110,21 +110,20 @@ def test_mock_pipeline_end_to_end(tmp_path, monkeypatch) -> None:
         assert "Generated persona experiment_id=" in log_lines
 
 
-def test_variant_generation_calls_openclaw_gateway(tmp_path, monkeypatch) -> None:
+def test_variant_generation_calls_direct_llm_pipeline(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv(
         "SAB_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path / 'generation.db'}"
     )
     monkeypatch.setenv("SAB_STORAGE_DIR", str(tmp_path / "storage"))
     monkeypatch.setenv("SAB_LOG_FILE", str(tmp_path / "generation.log"))
     monkeypatch.setenv("SAB_LLM_PROVIDER", "mock")
-    monkeypatch.setenv("SAB_OPENCLAW_BASE_URL", "http://openclaw-gateway:18789")
     from app.config import get_settings
 
     get_settings.cache_clear()
 
     async def fake_generate_hypotheses(self, payload):
         return {
-            "agent": "openclaw_pipeline",
+            "agent": "llm_pipeline",
             "status": "hypotheses_ready",
             "hypotheses": [
                 {
@@ -162,13 +161,13 @@ def test_variant_generation_calls_openclaw_gateway(tmp_path, monkeypatch) -> Non
             },
         }
 
-    from app.services.openclaw_variant_generator import OpenClawVariantGenerator
+    from app.services.llm_variant_generator import LLMVariantGenerator
 
     monkeypatch.setattr(
-        OpenClawVariantGenerator, "_generate_hypotheses", fake_generate_hypotheses
+        LLMVariantGenerator, "_generate_hypotheses", fake_generate_hypotheses
     )
     monkeypatch.setattr(
-        OpenClawVariantGenerator, "generate_variant_image", fake_generate_variant_image
+        LLMVariantGenerator, "generate_variant_image", fake_generate_variant_image
     )
 
     main = importlib.import_module("app.main")
@@ -203,9 +202,9 @@ def test_variant_generation_calls_openclaw_gateway(tmp_path, monkeypatch) -> Non
         assert result.status_code == 200
         payload = result.json()
         assert payload["status"] == "hypotheses_ready"
-        assert payload["runtime"] == "openclaw_gateway"
+        assert payload["runtime"] == "llm_pipeline"
         assert payload["agent_response"]["status"] == "hypotheses_ready"
-        assert payload["agent_response"]["agent"] == "openclaw_pipeline"
+        assert payload["agent_response"]["agent"] == "llm_pipeline"
         assert len(payload["agent_response"]["hypotheses"]) == 1
         from pathlib import Path
 

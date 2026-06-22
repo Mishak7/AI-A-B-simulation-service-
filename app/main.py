@@ -678,7 +678,7 @@ async def index() -> str:
           </label>
           <label>Цель эксперимента
             <textarea id="goal">Повысить вероятность перехода к следующему шагу оформления потребительского кредита («Продолжить») после просмотра кредитного калькулятора за счет более привлекательных значений суммы и срока кредита по умолчанию.</textarea>
-            <span class="field-hint">Можно оставить пустым: OpenClaw сможет сформулировать гипотезы от контрольного макета.</span>
+            <span class="field-hint">Можно оставить пустым: команда LLM-агентов сформулирует гипотезы по контрольному макету.</span>
           </label>
           <label>Целевая аудитория
             <textarea id="audience">Российские розничные клиенты, рассматривающие оформление потребительского кредита онлайн. Пользователи находятся на этапе первичного изучения условий кредита и оценивают доступность ежемесячного платежа, размер кредита и срок погашения перед началом оформления заявки.</textarea>
@@ -877,7 +877,7 @@ async def index() -> str:
           line.includes("Calling real LLM") ||
           line.includes("Calling real VLM") ||
           line.includes("LLM request failed") ||
-          line.includes("OpenClaw variant generation")
+          line.includes("LLM pipeline step")
         );
       });
     }
@@ -905,7 +905,7 @@ async def index() -> str:
         subtitleNode.textContent = "Выберите сценарий слева, чтобы открыть настройки запуска.";
       } else if (generationMode) {
         setStatus("Режим генерации: загрузите контрольный макет. Цель и аудиторию можно оставить пустыми.");
-        subtitleNode.textContent = "OpenClaw подготовит top-гипотезы, затем image-модель применит выбранное изменение к контролю.";
+        subtitleNode.textContent = "Команда LLM-агентов подготовит top-гипотезы, затем image-модель применит выбранное изменение к контролю.";
       } else {
         setStatus("Загружен пример: кредитный калькулятор с разными значениями суммы и срока по умолчанию.");
         subtitleNode.textContent = "После запуска здесь появятся голоса персон, причины выбора и рекомендации.";
@@ -929,7 +929,7 @@ async def index() -> str:
         <div class="run-progress" id="runProgress">
           <div class="run-progress-top">
             <div class="run-progress-copy">
-              <h2>${generationMode ? "Готовим OpenClaw-запуск" : "Симуляция выполняется"}</h2>
+              <h2>${generationMode ? "Готовим агентный запуск" : "Симуляция выполняется"}</h2>
               <p id="progressStageText">${generationMode ? "Создаем эксперимент и фиксируем заявку для агентной системы." : "Создаем эксперимент и готовим изображения."}</p>
               <div class="run-progress-eta" id="progressEta">Оцениваем время</div>
             </div>
@@ -942,7 +942,7 @@ async def index() -> str:
             <div class="run-stage active" data-stage="setup"><span class="stage-dot"></span><span class="stage-label">Создание эксперимента</span><span class="stage-count">в процессе</span></div>
             <div class="run-stage" data-stage="upload"><span class="stage-dot"></span><span class="stage-label">Загрузка изображений</span><span class="stage-count">ожидает</span></div>
             ${generationMode ? `
-              <div class="run-stage" data-stage="openclaw"><span class="stage-dot"></span><span class="stage-label">Заявка OpenClaw</span><span class="stage-count">ожидает</span></div>
+              <div class="run-stage" data-stage="agents"><span class="stage-dot"></span><span class="stage-label">Анализ LLM-агентов</span><span class="stage-count">ожидает</span></div>
               <div class="run-stage" data-stage="report"><span class="stage-dot"></span><span class="stage-label">Готовность к следующему шагу</span><span class="stage-count">ожидает</span></div>
             ` : `
               <div class="run-stage" data-stage="personas"><span class="stage-dot"></span><span class="stage-label">Генерация персон</span><span class="stage-count">0 / ${totalPersonas}</span></div>
@@ -1009,13 +1009,13 @@ async def index() -> str:
         ? recentLines.filter(line => line.includes(`experiment_id=${progressState.experimentId}`))
         : recentLines;
       if (progressState.mode === "variant_generation") {
-        const openClawStarted = scoped.some(line => line.includes("Variant generation requested"));
-        const openClawDone = scoped.some(line => line.includes("OpenClaw variant generation completed"));
+        const agentPipelineStarted = scoped.some(line => line.includes("Variant generation requested"));
+        const agentPipelineDone = scoped.some(line => line.includes("Variant generation completed"));
         if (progressState.experimentId) setProgressStage("setup", "done", "готово");
-        setProgressStage("openclaw", openClawDone ? "done" : openClawStarted ? "active" : "", openClawDone ? "готово" : openClawStarted ? "в процессе" : "ожидает");
-        setProgressStage("report", openClawDone ? "done" : "", openClawDone ? "готово" : "ожидает");
-        setProgressText(openClawDone ? "Гипотезы OpenClaw готовы." : "OpenClaw формирует top-гипотезы.");
-        updateProgressPercent(openClawDone ? 100 : openClawStarted ? 72 : 35);
+        setProgressStage("agents", agentPipelineDone ? "done" : agentPipelineStarted ? "active" : "", agentPipelineDone ? "готово" : agentPipelineStarted ? "в процессе" : "ожидает");
+        setProgressStage("report", agentPipelineDone ? "done" : "", agentPipelineDone ? "готово" : "ожидает");
+        setProgressText(agentPipelineDone ? "Гипотезы команды агентов готовы." : "LLM-агенты формируют top-гипотезы.");
+        updateProgressPercent(agentPipelineDone ? 100 : agentPipelineStarted ? 72 : 35);
         return;
       }
       const generatedPersonas = Math.min(
@@ -1068,9 +1068,9 @@ async def index() -> str:
       setProgressStage("setup", "done", "готово");
       setProgressStage("upload", "done", "готово");
       if (progressState.mode === "variant_generation") {
-        setProgressStage("openclaw", "done", "готово");
+        setProgressStage("agents", "done", "готово");
         setProgressStage("report", "done", "готово");
-        setProgressText("Гипотезы OpenClaw готовы.");
+        setProgressText("Гипотезы команды агентов готовы.");
         updateProgressPercent(100);
         return;
       }
@@ -1246,7 +1246,7 @@ async def index() -> str:
       lastGenerationResult = result;
       const agentResponse = result.agent_response || {};
       const hypotheses = agentResponse.hypotheses || [];
-      winnerNode.textContent = "OpenClaw: выберите гипотезу";
+      winnerNode.textContent = "Выберите гипотезу";
       subtitleNode.textContent = "Агенты сформировали top-3 гипотезы. Выберите одну для генерации тестового макета.";
       const hypothesisCards = hypotheses.slice(0, 3).map((item, index) => `
         <label class="hypothesis-option">
@@ -1260,11 +1260,11 @@ async def index() -> str:
       reportNode.innerHTML = `
         <div class="block">
           <h2>Выбор гипотезы</h2>
-          <p>${escapeHtml(result.message || "OpenClaw обработал контрольный макет.")}</p>
+          <p>${escapeHtml(result.message || "LLM-агенты обработали контрольный макет.")}</p>
         </div>
         <div class="block">
           <h3>Top-3 гипотезы</h3>
-          <div class="hypothesis-list">${hypothesisCards || "OpenClaw пока не вернул гипотезы."}</div>
+          <div class="hypothesis-list">${hypothesisCards || "LLM-агенты пока не вернули гипотезы."}</div>
           <button id="generateVariantImage" class="secondary" type="button" ${hypotheses.length ? "" : "disabled"}>Сгенерировать тестовый вариант</button>
         </div>
       `;
@@ -1405,11 +1405,11 @@ async def index() -> str:
       logsNode.textContent = "Лог пока пуст.";
       renderRunningProgress(totalPersonas, baselineMarker, mode);
       startLogPolling();
-      winnerNode.textContent = generationMode ? "OpenClaw..." : "Расчет...";
+      winnerNode.textContent = generationMode ? "LLM-агенты..." : "Расчет...";
       subtitleNode.textContent = generationMode
         ? "Запускаем агентный анализ и подготовку top-гипотез."
         : "Создаем эксперимент и опрашиваем синтетические персоны.";
-      setStatus(generationMode ? "Готовим OpenClaw-анализ..." : "Запускаем эксперимент...");
+      setStatus(generationMode ? "Готовим агентный анализ..." : "Запускаем эксперимент...");
       try {
         if (defaultFilesPromise) {
           await defaultFilesPromise;
@@ -1448,10 +1448,10 @@ async def index() -> str:
         await fetch(`/experiments/${created.id}/upload`, { method: "POST", body: form }).then(parseResponse);
         setProgressStage("upload", "done", "готово");
         if (generationMode) {
-          setProgressStage("openclaw", "active", "в процессе");
-          setProgressText("OpenClaw формирует top-гипотезы.");
+          setProgressStage("agents", "active", "в процессе");
+          setProgressText("LLM-агенты формируют top-гипотезы.");
           updateProgressPercent(35);
-          setStatus("Формируем top-гипотезы в OpenClaw...");
+          setStatus("Формируем top-гипотезы командой LLM-агентов...");
           const result = await fetch(`/experiments/${created.id}/run-generation`, {
             method: "POST",
             headers: {"Content-Type": "application/json"},
@@ -1461,7 +1461,7 @@ async def index() -> str:
           }).then(parseResponse);
           finishProgress();
           renderGenerationResult(result);
-          setStatus("OpenClaw вернул гипотезы.");
+          setStatus("Команда LLM-агентов вернула гипотезы.");
           return;
         }
         setProgressStage("personas", "active", `0 / ${totalPersonas}`);

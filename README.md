@@ -38,81 +38,44 @@ API docs:
 http://127.0.0.1:8000/docs
 ```
 
-## Docker Compose
+## Agent LLM pipeline
 
-To run the main app together with the official OpenClaw Gateway container:
+The app runs directly with Uvicorn. There is no separate agent gateway or container:
 
 ```bash
-docker compose up --build
+source .venv/bin/activate
+uvicorn app.main:app --reload
 ```
 
-Open the app at:
-
-```text
-http://127.0.0.1:8011
-```
-
-Compose starts two services:
-
-- `web`: the SimAB FastAPI app.
-- `openclaw-gateway`: a thin project image built `FROM ghcr.io/openclaw/openclaw:latest` with `openclaw/openclaw.json5` copied in.
-
-The `web` service calls OpenClaw through:
+Configure the OpenAI-compatible text/vision model and image-edit model in `.env`:
 
 ```env
-SAB_OPENCLAW_BASE_URL=http://openclaw-gateway:18789
-SAB_OPENCLAW_MODEL=openclaw/product_manager
-SAB_OPENCLAW_GATEWAY_TOKEN=<same value as OPENCLAW_GATEWAY_TOKEN when auth is enabled>
-SAB_IMAGE_API_KEY=<vsellm API key; falls back to SAB_REAL_API_KEY>
+SAB_LLM_PROVIDER=real
+SAB_REAL_API_KEY=...
+SAB_REAL_BASE_URL=https://api.vsellm.ru/v1
+SAB_REAL_MODEL=google/gemini-2.5-flash
+SAB_AGENT_PIPELINE_MODEL=openai/gpt-4.1-mini
+SAB_AGENT_PIPELINE_MAX_TOKENS=8192
+SAB_AGENT_PIPELINE_TIMEOUT_SECONDS=120
+SAB_IMAGE_API_KEY=...
 SAB_IMAGE_BASE_URL=https://api.vsellm.ru/v1
-SAB_IMAGE_MODEL=openai/gpt-image-1
+SAB_IMAGE_MODEL=google/gemini-3-pro-image-preview
 SAB_IMAGE_SIZE=1536x1024
 SAB_IMAGE_QUALITY=high
 SAB_IMAGE_INPUT_FIDELITY=high
 SAB_IMAGE_EDIT_ENDPOINT_PATH=/images/edits
 ```
 
-Compose uses `simab-dev-openclaw-token` as a local fallback token because OpenClaw refuses to bind the Gateway to `0.0.0.0` without auth. Set `OPENCLAW_GATEWAY_TOKEN` in `.env` to replace it.
-
-By default, the Gateway is published on host port `18791` to avoid clashing with a separately installed local OpenClaw Gateway on `18789`. Keep the internal compose URL unchanged and only move the host port when needed:
-
-```env
-OPENCLAW_GATEWAY_HOST_PORT=18792
-```
-
-OpenClaw Gateway exposes OpenAI-compatible endpoints, including `/v1/chat/completions`. The minimal project config lives in `openclaw/openclaw.json5` and enables `gateway.http.endpoints.chatCompletions.enabled`. The Compose container also starts with `--allow-unconfigured` so it can still boot while you iterate on the OpenClaw setup. Configure agents and richer Gateway behavior in that OpenClaw config as the agent system grows. The Compose file also passes through these model env vars for convenience:
-
-```env
-SAB_REAL_API_KEY=...
-SAB_REAL_BASE_URL=https://api.vsellm.ru/v1
-SAB_REAL_MODEL=google/gemini-2.5-flash
-```
-
-The OpenClaw image copies these project files at build time:
+The agent and scorer instructions are stored as standalone Markdown files:
 
 ```text
-openclaw/agents -> /home/node/.openclaw/agents
-openclaw/skills -> /home/node/.openclaw/skills
+app/prompts/agents/product_manager.md
+app/prompts/agents/ux_designer.md
+app/prompts/agents/ux_researcher.md
+app/prompts/skills/hypothesis_scorer.md
 ```
 
-For live editing without rebuilding, run Compose with the workspace override:
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.openclaw-workspace.yml up --build
-```
-
-On Docker Desktop for macOS, bind mounts require File Sharing access to this project path. If you see `operation not permitted` for `/Users/.../Documents/...`, add `/Users/mikhailkozyrev/Documents` in Docker Desktop Settings -> Resources -> File Sharing, then restart Docker Desktop.
-
-Current empty agent and OpenClaw-native skill scaffolds:
-
-```text
-openclaw/agents/product_manager.md
-openclaw/agents/ux_designer.md
-openclaw/agents/ux_researcher.md
-openclaw/skills/hypothesis_scorer/SKILL.md
-```
-
-Variant generation uses this OpenClaw pipeline:
+Variant generation uses this direct LLM pipeline:
 
 ```text
 product_manager.md
@@ -132,39 +95,14 @@ user approves generated challenger
 ready for synthetic A/B
 ```
 
-OpenClaw is used only for hypothesis discussion and ranking. After the user selects a hypothesis, the control screenshot is sent directly as multipart `image` to `{SAB_IMAGE_BASE_URL}{SAB_IMAGE_EDIT_ENDPOINT_PATH}` with a short prompt containing only the exact requested change and a minimal preservation constraint. There is no visual planner, overlay renderer, crop router, or image generation through chat completions. The image endpoint may return either `data[0].b64_json` or `data[0].url`; both are saved as the challenger. Request, response-shape, and output-path events are logged without API keys or image payloads.
-
-Smoke checks:
-
-```bash
-curl -H "Authorization: Bearer simab-dev-openclaw-token" http://127.0.0.1:18791/v1/models
-curl -H "Authorization: Bearer simab-dev-openclaw-token" \
-  -H "Content-Type: application/json" \
-  -d '{"model":"openclaw/product_manager","messages":[{"role":"user","content":"Return {\"ok\":true} as JSON."}]}' \
-  http://127.0.0.1:18791/v1/chat/completions
-```
-
-Useful logs:
-
-```bash
-docker compose logs -f openclaw-gateway
-docker compose logs -f web
-```
-
-In the `web` logs, look for:
-
-- `Sending OpenClaw Gateway request`
-- `OpenClaw Gateway response status=...`
-- `OpenClaw Gateway response parsed`
-
-In the `openclaw-gateway` logs, use the Gateway's own startup, model, auth, and request logs to verify whether the model request is accepted.
+The three specialist calls receive the same control screenshot independently. Their structured JSON outputs are passed to the scorer call, exactly as defined in the Markdown instructions. After the user selects a hypothesis, the control screenshot is sent directly as multipart `image` to `{SAB_IMAGE_BASE_URL}{SAB_IMAGE_EDIT_ENDPOINT_PATH}` with the existing strict minimal-change prompt. The response may contain either `data[0].b64_json` or `data[0].url`; both are saved as the challenger.
 
 ## API
 
 - `POST /experiments` creates an experiment.
 - `POST /experiments/{id}/upload` uploads `control` and `challenger` image files.
 - `POST /experiments/{id}/run` runs the simulation.
-- `POST /experiments/{id}/run-generation` sends the experiment fields and control image to OpenClaw.
+- `POST /experiments/{id}/run-generation` runs the direct agent LLM pipeline for the experiment fields and control image.
 - `POST /experiments/{id}/generate-variant-image` generates a challenger from the control image and selected hypothesis.
 - `GET /experiments/{id}` returns experiment status.
 - `GET /experiments/{id}/report` returns the final report.

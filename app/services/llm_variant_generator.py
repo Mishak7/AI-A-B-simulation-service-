@@ -14,16 +14,16 @@ from app.services.image_edit_client import ImageEditClient
 logger = logging.getLogger(__name__)
 
 
-class OpenClawVariantGenerator:
-    """Discuss hypotheses in OpenClaw, then generate one image variant directly."""
+class LLMVariantGenerator:
+    """Run the agent prompts directly through the configured LLM, then edit an image."""
 
     agent_prompt_files = {
-        "product_manager": Path("openclaw/agents/product_manager.md"),
-        "ux_designer": Path("openclaw/agents/ux_designer.md"),
-        "ux_researcher": Path("openclaw/agents/ux_researcher.md"),
+        "product_manager": Path("app/prompts/agents/product_manager.md"),
+        "ux_designer": Path("app/prompts/agents/ux_designer.md"),
+        "ux_researcher": Path("app/prompts/agents/ux_researcher.md"),
     }
     skill_prompt_files = {
-        "hypothesis_scorer": Path("openclaw/skills/hypothesis_scorer/SKILL.md"),
+        "hypothesis_scorer": Path("app/prompts/skills/hypothesis_scorer.md"),
     }
 
     async def start(self, experiment: Experiment, batch_size: int) -> dict[str, Any]:
@@ -31,16 +31,16 @@ class OpenClawVariantGenerator:
         settings = get_settings()
         experiment_dir = settings.storage_dir / str(experiment.id)
         experiment_dir.mkdir(parents=True, exist_ok=True)
-        request_path = experiment_dir / "openclaw_request.json"
-        response_path = experiment_dir / "openclaw_response.json"
+        request_path = experiment_dir / "llm_pipeline_request.json"
+        response_path = experiment_dir / "llm_pipeline_response.json"
         request_record = {
             **payload,
             "created_at": datetime.now(UTC).isoformat(),
             "integration": {
-                "runtime": "openclaw_gateway",
-                "transport": "openai_compatible_chat_completions",
-                "base_url": settings.openclaw_base_url,
-                "model": settings.openclaw_model,
+                "runtime": "llm_pipeline",
+                "transport": "direct_openai_compatible_chat_completions",
+                "base_url": settings.real_base_url,
+                "model": settings.agent_pipeline_model,
             },
         }
         request_path.write_text(
@@ -56,7 +56,7 @@ class OpenClawVariantGenerator:
             "message": "Агенты обсудили контрольный макет и сформулировали top-гипотезы.",
             "request_path": str(request_path),
             "response_path": str(response_path),
-            "runtime": "openclaw_gateway",
+            "runtime": "llm_pipeline",
             "agent_response": agent_response,
         }
 
@@ -140,33 +140,34 @@ class OpenClawVariantGenerator:
 
     async def _generate_hypotheses(self, payload: dict[str, Any]) -> dict[str, Any]:
         settings = get_settings()
-        if not settings.openclaw_base_url:
-            raise ValueError("SAB_OPENCLAW_BASE_URL is required for agent discussion")
+        api_key = settings.real_api_key or settings.gemini_api_key
+        if not api_key:
+            raise ValueError("SAB_REAL_API_KEY is required for agent discussion")
         try:
-            import httpx
+            from openai import AsyncOpenAI
         except ImportError as exc:
-            raise ImportError("Install httpx to call the OpenClaw container") from exc
+            raise ImportError("Install openai to run the LLM agent pipeline") from exc
 
-        url = settings.openclaw_base_url.rstrip("/") + "/v1/chat/completions"
-        headers = {}
-        if settings.openclaw_gateway_token:
-            headers["Authorization"] = f"Bearer {settings.openclaw_gateway_token}"
-
-        async with httpx.AsyncClient(timeout=settings.openclaw_timeout_seconds) as client:
+        async with AsyncOpenAI(
+            api_key=api_key,
+            base_url=settings.real_base_url,
+            timeout=settings.agent_pipeline_timeout_seconds,
+            max_retries=settings.real_max_retries,
+        ) as client:
             pm_output = await self._call_pipeline_step(
-                client, url, headers, payload, "openclaw/product_manager", "product_manager",
+                client, payload, "product_manager",
                 self._read_prompt_file(self.agent_prompt_files["product_manager"]), {}, True,
             )
             ux_designer_output = await self._call_pipeline_step(
-                client, url, headers, payload, "openclaw/ux_designer", "ux_designer",
+                client, payload, "ux_designer",
                 self._read_prompt_file(self.agent_prompt_files["ux_designer"]), {}, True,
             )
             ux_researcher_output = await self._call_pipeline_step(
-                client, url, headers, payload, "openclaw/ux_researcher", "ux_researcher",
+                client, payload, "ux_researcher",
                 self._read_prompt_file(self.agent_prompt_files["ux_researcher"]), {}, True,
             )
             scorer_output = await self._call_pipeline_step(
-                client, url, headers, payload, "openclaw/product_manager", "hypothesis_scorer",
+                client, payload, "hypothesis_scorer",
                 self._read_prompt_file(self.skill_prompt_files["hypothesis_scorer"]),
                 {
                     "pm_output": pm_output,
@@ -186,10 +187,7 @@ class OpenClawVariantGenerator:
     async def _call_pipeline_step(
         self,
         client: Any,
-        url: str,
-        headers: dict[str, str],
         payload: dict[str, Any],
-        model: str,
         step: str,
         instructions: str,
         context: dict[str, Any],
@@ -199,26 +197,29 @@ class OpenClawVariantGenerator:
         content: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
         if include_image:
             content.append(self._image_content(payload))
-        response = await client.post(
-            url,
-            headers=headers,
-            json={
-                "model": model,
-                "messages": [{"role": "user", "content": content}],
-                "temperature": 0.2,
-                "tools": [],
-                "tool_choice": "none",
-            },
+        settings = get_settings()
+        logger.info(
+            "LLM pipeline step started step=%s model=%s include_image=%s",
+            step,
+            settings.agent_pipeline_model,
+            include_image,
         )
-        response.raise_for_status()
+        response = await client.chat.completions.create(
+            model=settings.agent_pipeline_model,
+            messages=[{"role": "user", "content": content}],
+            temperature=0.2,
+            max_tokens=settings.agent_pipeline_max_tokens,
+        )
         expected_keys = (
             {"top_hypotheses", "scored_hypotheses"}
             if step == "hypothesis_scorer"
             else None
         )
-        return self._parse_gateway_payload(
-            response.json(), expected_keys=expected_keys
+        result = self._parse_chat_completion_payload(
+            response.model_dump(), expected_keys=expected_keys
         )
+        logger.info("LLM pipeline step completed step=%s", step)
+        return result
 
     def _render_step_prompt(
         self,
@@ -322,7 +323,7 @@ class OpenClawVariantGenerator:
                 "Hypothesis scorer returned no usable top_hypotheses or scored_hypotheses"
             )
         return {
-            "agent": "openclaw_pipeline",
+            "agent": "llm_pipeline",
             "status": "hypotheses_ready",
             "hypotheses": hypotheses[:3],
             "next_step": "user_selects_hypothesis_for_image_generation",
@@ -346,7 +347,7 @@ class OpenClawVariantGenerator:
     @staticmethod
     def _read_prompt_file(path: Path) -> str:
         if not path.exists():
-            raise FileNotFoundError(f"OpenClaw prompt file not found: {path}")
+            raise FileNotFoundError(f"LLM pipeline prompt file not found: {path}")
         return path.read_text(encoding="utf-8")
 
     @staticmethod
@@ -354,22 +355,22 @@ class OpenClawVariantGenerator:
         return json.dumps(value, ensure_ascii=False, indent=2) if isinstance(value, (dict, list)) else str(value)
 
     @staticmethod
-    def _parse_gateway_payload(
+    def _parse_chat_completion_payload(
         payload: dict[str, Any],
         expected_keys: set[str] | None = None,
     ) -> dict[str, Any]:
         try:
             content = payload["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as exc:
-            raise ValueError("OpenClaw response is not chat.completions-compatible") from exc
+            raise ValueError("LLM response is not chat.completions-compatible") from exc
         if isinstance(content, list):
             content = "\n".join(
                 part.get("text", "") for part in content if isinstance(part, dict)
             )
         stripped = str(content or "").strip()
-        objects = OpenClawVariantGenerator._decode_json_objects(stripped)
+        objects = LLMVariantGenerator._decode_json_objects(stripped)
         if not objects:
-            raise ValueError("OpenClaw content does not contain a valid JSON object")
+            raise ValueError("LLM content does not contain a valid JSON object")
         if expected_keys:
             matching = [
                 item for item in objects if expected_keys.intersection(item.keys())
@@ -377,14 +378,14 @@ class OpenClawVariantGenerator:
             if not matching:
                 keys = ", ".join(sorted(expected_keys))
                 raise ValueError(
-                    f"OpenClaw response does not contain expected JSON keys: {keys}"
+                    f"LLM response does not contain expected JSON keys: {keys}"
                 )
             result = matching[0]
         else:
             result = objects[0]
         if len(objects) > 1:
             logger.warning(
-                "OpenClaw response contained multiple JSON objects; selected_keys=%s objects=%s",
+                "LLM response contained multiple JSON objects; selected_keys=%s objects=%s",
                 sorted(result.keys()),
                 len(objects),
             )

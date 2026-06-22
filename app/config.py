@@ -31,10 +31,9 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_max_bytes: int = 2_000_000
     log_backup_count: int = 3
-    openclaw_base_url: str | None = None
-    openclaw_gateway_token: str | None = None
-    openclaw_model: str = "openclaw/product_manager"
-    openclaw_timeout_seconds: float = 120.0
+    agent_pipeline_model: str = "openai/gpt-4.1-mini"
+    agent_pipeline_max_tokens: int = 8_192
+    agent_pipeline_timeout_seconds: float = 120.0
 
     @property
     def effective_image_api_key(self) -> str | None:
