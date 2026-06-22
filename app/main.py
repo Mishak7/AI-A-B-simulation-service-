@@ -144,58 +144,98 @@ async def index() -> str:
   <title>SimAB | Синтетический A/B-тест</title>
   <style>
     :root {
-      --bg: #f4f7f6;
-      --panel: #ffffff;
-      --text: #101820;
-      --muted: #667085;
-      --line: #d9e1df;
-      --green: #12a154;
-      --green-dark: #08783d;
-      --blue: #2364aa;
-      --yellow: #f2c94c;
-      --red: #d92d20;
-      --soft: #edf8f2;
-      --shadow: 0 16px 44px rgba(16, 24, 32, 0.08);
+      --bg: #031923;
+      --panel: #082d37;
+      --panel-soft: #0b3942;
+      --panel-deep: #05242e;
+      --text: #e3fff7;
+      --muted: #8fbab6;
+      --line: rgba(111, 244, 202, 0.18);
+      --green: #53e89b;
+      --green-dark: #22bd7b;
+      --blue: #45bce9;
+      --yellow: #ffc76b;
+      --red: #ff6f79;
+      --soft: rgba(83, 232, 155, 0.09);
+      --shadow: 0 22px 70px rgba(0, 8, 13, 0.46), inset 0 1px 0 rgba(198, 255, 235, 0.08);
     }
 
     * { box-sizing: border-box; }
+    html { background: #031923; }
     body {
       margin: 0;
-      background: var(--bg);
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 12% -8%, rgba(31, 119, 151, 0.42), transparent 34%),
+        radial-gradient(circle at 88% 4%, rgba(34, 189, 123, 0.16), transparent 28%),
+        linear-gradient(145deg, #031923 0%, #052731 52%, #03171f 100%);
+      background-attachment: fixed;
       color: var(--text);
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: "Manrope", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
     }
     main { max-width: 1240px; margin: 0 auto; padding: 28px 20px 40px; }
     header {
+      position: relative;
+      overflow: hidden;
       display: flex;
       justify-content: space-between;
       gap: 18px;
-      align-items: flex-end;
+      align-items: center;
+      min-height: 142px;
       margin-bottom: 22px;
+      padding: 30px 34px;
+      border: 1px solid rgba(111, 244, 202, 0.2);
+      border-radius: 20px;
+      background:
+        radial-gradient(circle at 82% 28%, rgba(83, 232, 155, 0.2), transparent 28%),
+        linear-gradient(120deg, rgba(10, 56, 68, 0.96), rgba(4, 36, 46, 0.98));
+      box-shadow: var(--shadow);
     }
-    h1 { font-size: 30px; font-weight: 650; line-height: 1.1; margin: 0 0 8px; letter-spacing: 0; }
+    header::after {
+      content: "";
+      position: absolute;
+      width: 260px;
+      aspect-ratio: 1;
+      right: -80px;
+      top: -150px;
+      border-radius: 50%;
+      border: 1px solid rgba(112, 255, 207, 0.22);
+      box-shadow: inset 0 0 70px rgba(69, 188, 233, 0.12);
+      pointer-events: none;
+    }
+    h1 { max-width: 760px; font-size: clamp(28px, 4vw, 46px); font-weight: 680; line-height: 1.08; margin: 0; letter-spacing: -0.025em; }
     h2 { font-size: 18px; font-weight: 600; margin: 0 0 16px; letter-spacing: 0; }
     h3 { font-size: 15px; font-weight: 600; margin: 0 0 10px; letter-spacing: 0; }
     p { margin: 0; color: var(--muted); line-height: 1.45; }
     .badge {
-      border: 1px solid #b7dfc9;
-      background: #e9f8ef;
-      color: var(--green-dark);
+      border: 1px solid rgba(83, 232, 155, 0.34);
+      background: linear-gradient(135deg, rgba(83, 232, 155, 0.17), rgba(17, 84, 91, 0.5));
+      color: #8fffc5;
       border-radius: 999px;
       padding: 7px 11px;
       font-size: 13px;
       font-weight: 550;
       white-space: nowrap;
+      box-shadow: inset 0 1px 0 rgba(210, 255, 240, 0.16), 0 10px 28px rgba(0, 0, 0, 0.22);
     }
     .layout { display: grid; grid-template-columns: minmax(360px, 440px) 1fr; gap: 18px; align-items: start; }
     section {
-      background: var(--panel);
+      position: relative;
+      background: linear-gradient(145deg, rgba(12, 57, 67, 0.96), rgba(5, 36, 46, 0.98));
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: 16px;
       box-shadow: var(--shadow);
     }
+    section::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(150, 255, 218, 0.42), transparent);
+      pointer-events: none;
+    }
     .panel { padding: 20px; }
-    label { display: block; font-size: 13px; font-weight: 560; margin: 14px 0 0; color: #26352f; }
+    label { display: block; font-size: 13px; font-weight: 560; margin: 14px 0 0; color: #c8eee7; }
     .mode-switch {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -208,9 +248,20 @@ async def index() -> str:
       min-height: 92px;
       padding: 13px;
       border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #fbfdfc;
+      border-radius: 11px;
+      background: linear-gradient(145deg, rgba(13, 60, 69, 0.9), rgba(6, 39, 48, 0.94));
       cursor: pointer;
+      box-shadow: inset 0 1px 0 rgba(201, 255, 238, 0.05);
+      min-width: 0;
+      min-height: 64px;
+      display: grid;
+      place-items: center;
+      text-align: center;
+    }
+    .mode-option.is-active {
+      border-color: var(--green);
+      background: linear-gradient(145deg, rgba(83, 232, 155, 0.2), rgba(7, 55, 57, 0.94));
+      box-shadow: 0 0 0 3px rgba(83, 232, 155, 0.09), inset 0 1px 0 rgba(215, 255, 241, 0.14);
     }
     .mode-option input {
       position: absolute;
@@ -222,7 +273,7 @@ async def index() -> str:
     .mode-title {
       display: block;
       margin-bottom: 6px;
-      color: #24352f;
+      color: #d9f9f2;
       font-size: 13px;
       font-weight: 650;
       overflow-wrap: anywhere;
@@ -243,8 +294,8 @@ async def index() -> str:
     }
     .mode-option:has(input:checked) {
       border-color: var(--green);
-      background: #edf8f2;
-      box-shadow: 0 0 0 3px rgba(18, 161, 84, 0.1);
+      background: linear-gradient(145deg, rgba(83, 232, 155, 0.18), rgba(7, 55, 57, 0.92));
+      box-shadow: 0 0 0 3px rgba(83, 232, 155, 0.1), inset 0 1px 0 rgba(215, 255, 241, 0.12);
     }
     .field-hint {
       display: none;
@@ -259,35 +310,40 @@ async def index() -> str:
       width: 100%;
       margin-top: 7px;
       padding: 11px 12px;
-      border: 1px solid #c8d4d1;
-      border-radius: 7px;
-      background: #fbfdfc;
+      border: 1px solid rgba(143, 219, 205, 0.22);
+      border-radius: 10px;
+      background: linear-gradient(180deg, rgba(3, 28, 36, 0.9), rgba(7, 42, 50, 0.92));
       color: var(--text);
       font: inherit;
       font-weight: 400;
       font-size: 14px;
       outline: none;
     }
-    input:focus, textarea:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(18, 161, 84, 0.13); }
+    input::placeholder, textarea::placeholder { color: #668f8d; }
+    input:focus, textarea:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(83, 232, 155, 0.12), inset 0 1px 0 rgba(196, 255, 235, 0.08); }
     textarea { min-height: 92px; resize: vertical; }
     .row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
     .upload-row.single { grid-template-columns: 1fr; }
     body.variant-generation .challenger-upload { display: none; }
-    .upload-row label {
+    .upload-field {
       display: grid;
-      grid-template-rows: 18px auto;
+      grid-template-rows: 18px auto auto;
+      gap: 7px;
       align-items: start;
+      color: #c8eee7;
+      font-size: 13px;
+      font-weight: 560;
     }
     .upload {
       position: relative;
       overflow: hidden;
       min-height: 184px;
-      margin-top: 7px;
-      border: 1px dashed #abc6bd;
-      border-radius: 8px;
-      background: #f9fcfb;
+      margin-top: 0;
+      border: 1px dashed rgba(117, 232, 198, 0.34);
+      border-radius: 12px;
+      background: linear-gradient(145deg, rgba(8, 48, 57, 0.78), rgba(4, 31, 40, 0.9));
     }
-    .upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+    .upload input { display: none; }
     .upload-content {
       min-height: 184px;
       display: flex;
@@ -298,16 +354,52 @@ async def index() -> str:
       text-align: center;
       color: var(--muted);
     }
-    .upload-title { color: #24352f; font-weight: 600; }
+    .upload-title { color: #d6f7f0; font-weight: 600; }
+    .image-preview {
+      display: block;
+      width: 100%;
+      min-width: 0;
+      min-height: 0;
+      padding: 0;
+      border-radius: 11px 11px 0 0;
+      overflow: hidden;
+      background: transparent;
+      box-shadow: none;
+    }
+    .image-preview:hover { transform: none; filter: brightness(1.06); box-shadow: none; }
     .upload img { width: 100%; height: 128px; object-fit: cover; border-bottom: 1px solid var(--line); display: none; }
     .upload.has-image img { display: block; }
     .upload.has-image .upload-content { min-height: 55px; padding: 10px 12px; text-align: left; }
+    .upload-button {
+      display: block;
+      margin: 0;
+      padding: 9px 12px;
+      border: 1px solid rgba(83, 232, 155, 0.24);
+      border-radius: 9px;
+      background: rgba(83, 232, 155, 0.09);
+      color: #9fffc9;
+      text-align: center;
+      cursor: pointer;
+    }
+    .upload-button:hover { background: rgba(83, 232, 155, 0.15); }
+    .image-lightbox {
+      width: min(94vw, 1400px);
+      max-height: 92vh;
+      padding: 46px 12px 12px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: #031923;
+      box-shadow: 0 30px 90px rgba(0, 0, 0, 0.72);
+    }
+    .image-lightbox::backdrop { background: rgba(0, 10, 15, 0.88); backdrop-filter: blur(8px); }
+    .image-lightbox img { display: block; max-width: 100%; max-height: calc(92vh - 60px); margin: auto; object-fit: contain; border-radius: 10px; }
+    .lightbox-close { position: absolute; top: 10px; right: 12px; min-width: 0; min-height: 30px; padding: 5px 10px; }
     .actions { display: flex; align-items: center; gap: 12px; margin-top: 18px; }
     button {
       border: 0;
-      border-radius: 7px;
-      background: var(--green);
-      color: white;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #63f2aa 0%, #2fc884 58%, #19a96e 100%);
+      color: #03251d;
       padding: 12px 15px;
       min-width: 220px;
       min-height: 44px;
@@ -317,8 +409,10 @@ async def index() -> str:
       white-space: normal;
       line-height: 1.2;
       overflow-wrap: anywhere;
+      box-shadow: inset 0 1px 0 rgba(232, 255, 246, 0.62), 0 12px 30px rgba(20, 194, 121, 0.22);
+      transition: transform 0.18s ease, filter 0.18s ease, box-shadow 0.18s ease;
     }
-    button:hover { background: var(--green-dark); }
+    button:hover { filter: brightness(1.08); transform: translateY(-1px); box-shadow: inset 0 1px 0 rgba(232, 255, 246, 0.72), 0 15px 36px rgba(20, 194, 121, 0.3); }
     button:disabled { opacity: 0.62; cursor: wait; }
     .status { color: var(--muted); font-size: 13px; line-height: 1.35; }
     .result { min-height: 680px; overflow: hidden; }
@@ -328,7 +422,7 @@ async def index() -> str:
       gap: 16px;
       padding: 20px;
       border-bottom: 1px solid var(--line);
-      background: linear-gradient(90deg, #ffffff 0%, #f2fbf6 100%);
+      background: linear-gradient(105deg, rgba(8, 43, 54, 0.98), rgba(11, 64, 65, 0.92));
     }
     .winner {
       display: inline-flex;
@@ -336,11 +430,13 @@ async def index() -> str:
       min-height: 32px;
       padding: 6px 10px;
       border-radius: 999px;
-      background: #e8f6ee;
-      color: var(--green-dark);
+      background: rgba(83, 232, 155, 0.13);
+      color: #8fffc5;
+      border: 1px solid rgba(83, 232, 155, 0.25);
       font-weight: 450;
       white-space: nowrap;
     }
+    .winner[hidden], .winner:empty { display: none; }
     .empty {
       display: grid;
       place-items: center;
@@ -349,7 +445,7 @@ async def index() -> str:
       text-align: center;
       color: var(--muted);
     }
-    .empty-inner { max-width: 460px; }
+    .empty-inner { width: min(460px, 100%); max-width: 460px; }
     .empty-visual {
       width: min(360px, 100%);
       height: 180px;
@@ -357,9 +453,9 @@ async def index() -> str:
       border: 1px solid var(--line);
       border-radius: 8px;
       background:
-        linear-gradient(90deg, rgba(18, 161, 84, 0.2) 62%, transparent 62%),
-        linear-gradient(90deg, rgba(35, 100, 170, 0.22) 38%, transparent 38%),
-        #fff;
+        linear-gradient(90deg, rgba(83, 232, 155, 0.25) 62%, transparent 62%),
+        linear-gradient(90deg, rgba(69, 188, 233, 0.25) 38%, transparent 38%),
+        linear-gradient(145deg, #0a3943, #05252f);
       background-size: 100% 42px, 100% 42px, auto;
       background-position: 0 30px, 0 92px, 0 0;
       background-repeat: no-repeat;
@@ -420,7 +516,7 @@ async def index() -> str:
       height: 8px;
       overflow: hidden;
       border-radius: 999px;
-      background: #e3ece9;
+      background: rgba(1, 22, 29, 0.75);
     }
     .run-progress-fill {
       height: 100%;
@@ -436,7 +532,7 @@ async def index() -> str:
       bottom: 0;
       width: 96px;
       border-radius: inherit;
-      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.78), transparent);
+      background: linear-gradient(90deg, transparent, rgba(202, 255, 237, 0.52), transparent);
       animation: progress-sweep 1.35s ease-in-out infinite;
     }
     @keyframes progress-sweep {
@@ -458,18 +554,18 @@ async def index() -> str:
       align-items: center;
       padding: 11px 12px;
       border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #fff;
+      border-radius: 10px;
+      background: linear-gradient(145deg, rgba(10, 52, 61, 0.92), rgba(5, 34, 43, 0.95));
     }
     .stage-dot {
       width: 10px;
       aspect-ratio: 1;
       border-radius: 50%;
-      background: #c8d4d1;
+      background: #527875;
       justify-self: center;
     }
     .stage-label {
-      color: #26352f;
+      color: #c9eee7;
       font-size: 13px;
       font-weight: 560;
     }
@@ -494,7 +590,7 @@ async def index() -> str:
       border: 1px solid var(--line);
       border-radius: 8px;
       padding: 14px;
-      background: #fff;
+      background: linear-gradient(145deg, rgba(12, 57, 66, 0.86), rgba(5, 34, 43, 0.92));
       min-height: 92px;
     }
     .metric-value { font-size: 26px; font-weight: 650; margin-top: 4px; }
@@ -508,19 +604,20 @@ async def index() -> str:
       display: grid;
       place-items: center;
       margin: 0 auto;
+      box-shadow: inset 0 0 30px rgba(2, 20, 27, 0.3), 0 16px 42px rgba(0, 8, 13, 0.34);
     }
     .donut-center {
       width: 116px;
       aspect-ratio: 1;
       border-radius: 50%;
-      background: #fff;
+      background: var(--panel-deep);
       border: 1px solid var(--line);
     }
     .viz-summary { margin-bottom: 2px; }
     .viz-summary strong { font-weight: 600; }
     .bars { display: grid; gap: 12px; }
     .bar-row { display: grid; grid-template-columns: 120px 1fr 46px; gap: 10px; align-items: center; font-size: 13px; }
-    .track { height: 12px; background: #edf1ef; border-radius: 999px; overflow: hidden; }
+    .track { height: 12px; background: rgba(1, 20, 27, 0.76); border: 1px solid rgba(139, 224, 207, 0.1); border-radius: 999px; overflow: hidden; }
     .fill { height: 100%; border-radius: 999px; width: var(--w); }
     .fill.control { background: var(--green); }
     .fill.challenger { background: var(--blue); }
@@ -530,7 +627,7 @@ async def index() -> str:
       border: 1px solid var(--line);
       border-radius: 8px;
       padding: 14px;
-      background: #fff;
+      background: linear-gradient(145deg, rgba(12, 57, 66, 0.82), rgba(5, 34, 43, 0.9));
     }
     .hypothesis-list { display: grid; gap: 10px; margin-bottom: 14px; }
     .hypothesis-option {
@@ -541,24 +638,24 @@ async def index() -> str:
       margin: 0;
       padding: 12px;
       border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #fbfdfc;
+      border-radius: 10px;
+      background: linear-gradient(145deg, rgba(11, 54, 63, 0.86), rgba(5, 35, 44, 0.94));
       cursor: pointer;
     }
     .hypothesis-option input { margin: 3px 0 0; width: auto; }
     .hypothesis-option strong,
     .hypothesis-option span,
     .hypothesis-option em { grid-column: 2; }
-    .hypothesis-option strong { color: #26352f; font-size: 14px; }
+    .hypothesis-option strong { color: #d3f5ee; font-size: 14px; }
     .hypothesis-option span { color: var(--muted); font-size: 13px; line-height: 1.4; }
-    .hypothesis-option em { color: #2364aa; font-size: 12px; font-style: normal; }
+    .hypothesis-option em { color: #72d8ff; font-size: 12px; font-style: normal; }
     .generated-variant {
       width: 100%;
       max-height: 520px;
       object-fit: contain;
       border: 1px solid var(--line);
       border-radius: 8px;
-      background: #f7faf9;
+      background: #041f29;
     }
     .variant-approval {
       padding: 10px;
@@ -570,7 +667,7 @@ async def index() -> str:
       object-fit: contain;
       object-position: top center;
     }
-    ul { margin: 0; padding-left: 18px; color: #26352f; line-height: 1.5; }
+    ul { margin: 0; padding-left: 18px; color: #c9eee7; line-height: 1.5; }
     li + li { margin-top: 7px; }
     .agents {
       width: 100%;
@@ -579,7 +676,7 @@ async def index() -> str:
       overflow: hidden;
     }
     th, td { padding: 10px 9px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
-    th { color: var(--muted); font-size: 12px; background: #f7faf9; }
+    th { color: var(--muted); font-size: 12px; background: rgba(3, 29, 37, 0.72); }
     tr:last-child td { border-bottom: 0; }
     .pill {
       display: inline-flex;
@@ -591,10 +688,10 @@ async def index() -> str:
       font-size: 12px;
       white-space: nowrap;
     }
-    .pill.control { color: var(--green-dark); background: #e8f6ee; }
-    .pill.challenger { color: #174d86; background: #e9f1fb; }
-    .pill.none { color: #7a5a00; background: #fff6d7; }
-    .pill.bad { color: #981b12; background: #fee4e2; }
+    .pill.control { color: #8fffc5; background: rgba(83, 232, 155, 0.14); }
+    .pill.challenger { color: #86ddff; background: rgba(69, 188, 233, 0.15); }
+    .pill.none { color: #ffd893; background: rgba(255, 199, 107, 0.14); }
+    .pill.bad { color: #ff9da5; background: rgba(255, 111, 121, 0.14); }
     .error { color: var(--red); font-weight: 600; }
     .logs-panel {
       margin-top: 18px;
@@ -614,19 +711,20 @@ async def index() -> str:
       padding: 8px 12px;
       font-size: 13px;
       font-weight: 560;
-      background: #eef7f2;
-      color: var(--green-dark);
-      border: 1px solid #b7dfc9;
+      background: rgba(83, 232, 155, 0.1);
+      color: #8fffc5;
+      border: 1px solid rgba(83, 232, 155, 0.26);
+      box-shadow: inset 0 1px 0 rgba(210, 255, 240, 0.08);
     }
-    .logs-head button:hover { background: #dff2e8; }
+    .logs-head button:hover { background: rgba(83, 232, 155, 0.17); }
     .log-output {
       margin: 0;
       max-height: 320px;
       overflow: auto;
       border: 1px solid var(--line);
       border-radius: 8px;
-      background: #0f1713;
-      color: #d7f4df;
+      background: #02141b;
+      color: #bcebdc;
       padding: 12px;
       font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       white-space: pre-wrap;
@@ -651,69 +749,62 @@ async def index() -> str:
   <main>
     <header>
       <div>
-        <h1>Синтетический A/B-тест интерфейса</h1>
-        <p>Проверка гипотезы на наборе банковских персон до запуска реального эксперимента.</p>
+        <h1>SimAB: проверка продуктовых гипотез</h1>
       </div>
-      <div class="badge">SimAB для продуктовых команд</div>
     </header>
 
     <div class="layout">
       <section class="panel">
         <h2>Настройка эксперимента</h2>
-        <div class="mode-switch" role="radiogroup" aria-label="Режим эксперимента">
-          <label class="mode-option">
-            <input type="radio" name="experimentMode" value="ab_test" />
-            <span class="mode-title">Проверить готовый A/B-тест</span>
-            <span class="mode-copy">Есть контрольный и тестовый макет.</span>
-          </label>
-          <label class="mode-option">
-            <input type="radio" name="experimentMode" value="variant_generation" />
-            <span class="mode-title">Сгенерировать гипотезы и вариант</span>
-            <span class="mode-copy">Есть только контрольный макет.</span>
-          </label>
+        <div class="mode-switch" aria-label="Режим эксперимента">
+          <button class="mode-option" type="button" data-mode="ab_test">
+            <span class="mode-title">A/B тестирование</span>
+          </button>
+          <button class="mode-option" type="button" data-mode="variant_generation">
+            <span class="mode-title">Продуктовая команда</span>
+          </button>
         </div>
         <div class="experiment-form" id="experimentForm">
           <label>Название
-            <input id="name" value="Consumer Loan Calculator Default Values" />
+            <input id="name" value="Демо" />
           </label>
           <label>Цель эксперимента
-            <textarea id="goal">Повысить вероятность перехода к следующему шагу оформления потребительского кредита («Продолжить») после просмотра кредитного калькулятора за счет более привлекательных значений суммы и срока кредита по умолчанию.</textarea>
+            <textarea id="goal">Если в кредитном калькуляторе по умолчанию показать более привлекательные сумму и срок кредита, то больше пользователей нажмут «Продолжить».</textarea>
             <span class="field-hint">Можно оставить пустым: команда LLM-агентов сформулирует гипотезы по контрольному макету.</span>
           </label>
           <label>Целевая аудитория
-            <textarea id="audience">Российские розничные клиенты, рассматривающие оформление потребительского кредита онлайн. Пользователи находятся на этапе первичного изучения условий кредита и оценивают доступность ежемесячного платежа, размер кредита и срок погашения перед началом оформления заявки.</textarea>
+            <textarea id="audience">Российские розничные клиенты, которые онлайн изучают условия потребительского кредита и оценивают платёж, сумму и срок перед оформлением заявки.</textarea>
             <span class="field-hint">Можно оставить пустым, если аудиторию нужно вывести из контекста интерфейса.</span>
           </label>
           <div class="row upload-row" id="uploadRow">
-            <label>Контроль
+            <div class="upload-field">Контроль
               <div class="upload has-image" id="controlDrop">
-                <img id="controlPreview" src="/static/consumer_loan_300k_5y.png" alt="" />
+                <button class="image-preview" type="button" data-preview="controlPreview" aria-label="Открыть контрольное изображение">
+                  <img id="controlPreview" src="/static/consumer_loan_300k_5y.png" alt="Контрольный макет" />
+                </button>
                 <div class="upload-content">
                   <span class="upload-title" id="controlName">Контроль: 300 000 ₽, 5 лет</span>
-                  <span>Можно заменить своим PNG или JPG</span>
                 </div>
-                <input id="control" type="file" accept="image/*" />
               </div>
-            </label>
-            <label class="challenger-upload">Тестовый вариант
+              <label class="upload-button" for="control">Загрузить другое изображение</label>
+              <input id="control" type="file" accept="image/*" hidden />
+            </div>
+            <div class="upload-field challenger-upload">Тестовый вариант
               <div class="upload has-image" id="challengerDrop">
-                <img id="challengerPreview" src="/static/consumer_loan_100k_3y.png" alt="" />
+                <button class="image-preview" type="button" data-preview="challengerPreview" aria-label="Открыть тестовое изображение">
+                  <img id="challengerPreview" src="/static/consumer_loan_100k_3y.png" alt="Тестовый макет" />
+                </button>
                 <div class="upload-content">
                   <span class="upload-title" id="challengerName">Тест: 100 000 ₽, 3 года</span>
-                  <span>Можно заменить своим PNG или JPG</span>
                 </div>
-                <input id="challenger" type="file" accept="image/*" />
               </div>
-            </label>
+              <label class="upload-button" for="challenger">Загрузить другое изображение</label>
+              <input id="challenger" type="file" accept="image/*" hidden />
+            </div>
           </div>
-          <div class="row">
-            <label>Количество персон
-              <input id="personas" type="number" min="1" max="500" value="24" />
-            </label>
-            <label>Размер батча
-              <input id="batch" type="number" min="1" max="50" value="10" />
-            </label>
-          </div>
+          <label>Количество персон
+            <input id="personas" type="number" min="1" max="500" value="24" />
+          </label>
           <div class="actions">
             <button id="run">Запустить симуляцию</button>
             <div class="status" id="status">Выберите режим эксперимента.</div>
@@ -725,15 +816,13 @@ async def index() -> str:
         <div class="result-header">
           <div>
             <h2>Отчет по эксперименту</h2>
-            <p id="subtitle">После запуска здесь появятся голоса персон, причины выбора и рекомендации.</p>
+            <p id="subtitle">Выберите сценарий слева, чтобы открыть настройки запуска.</p>
           </div>
-          <div class="winner" id="winner">Нет результата</div>
+          <div class="winner" id="winner" hidden></div>
         </div>
         <div id="report" class="empty">
           <div class="empty-inner">
             <div class="empty-visual"></div>
-            <h2>Готов пример для запуска</h2>
-            <p>По умолчанию сравниваются значения кредитного калькулятора: контроль 300 000 ₽ на 5 лет и тест 100 000 ₽ на 3 года. Скриншоты можно заменить своими.</p>
           </div>
         </div>
       </section>
@@ -743,13 +832,16 @@ async def index() -> str:
       <div class="logs-head">
         <div>
           <h2>Журнал событий</h2>
-          <p>Последние серверные события: генерация персон, решения и сборка отчета.</p>
         </div>
         <button id="refreshLogs" type="button">Обновить</button>
       </div>
       <pre id="logs" class="log-output">Лог пока пуст.</pre>
     </section>
   </main>
+  <dialog class="image-lightbox" id="imageLightbox">
+    <button class="lightbox-close" id="closeLightbox" type="button">Закрыть</button>
+    <img id="lightboxImage" alt="Увеличенный макет" />
+  </dialog>
   <script>
     const reportNode = document.getElementById("report");
     const statusNode = document.getElementById("status");
@@ -761,10 +853,33 @@ async def index() -> str:
     let selectedControlFile = null;
     let selectedChallengerFile = null;
     let defaultFilesPromise = null;
+    const demoFiles = {};
     let logPoller = null;
     let progressState = null;
     let sessionLogMarker = null;
     let lastGenerationResult = null;
+    let activeMode = "ab_test";
+
+    const modePresets = {
+      ab_test: {
+        name: "Демо",
+        goal: "Если в кредитном калькуляторе по умолчанию показать более привлекательные сумму и срок кредита, то больше пользователей нажмут «Продолжить».",
+        audience: "Российские розничные клиенты, которые онлайн изучают условия потребительского кредита и оценивают платёж, сумму и срок перед оформлением заявки.",
+        controlSrc: "/static/consumer_loan_300k_5y.png",
+        controlName: "Контроль: 300 000 ₽, 5 лет",
+        challengerSrc: "/static/consumer_loan_100k_3y.png",
+        challengerName: "Тест: 100 000 ₽, 3 года"
+      },
+      variant_generation: {
+        name: "Демо",
+        goal: "Если поменять приз с машины на квартиру, то мы увеличим конверсию в перевод зарплаты.",
+        audience: "",
+        controlSrc: "/static/product_team_salary_car.png",
+        controlName: "Контроль: розыгрыш автомобиля",
+        challengerSrc: null,
+        challengerName: ""
+      }
+    };
 
     const labels = {
       control: "Базовый вариант",
@@ -883,11 +998,31 @@ async def index() -> str:
     }
 
     function currentMode() {
-      return document.querySelector('input[name="experimentMode"]:checked')?.value || null;
+      return activeMode;
     }
 
     function isVariantGenerationMode() {
       return currentMode() === "variant_generation";
+    }
+
+    function applyModePreset(mode) {
+      const preset = modePresets[mode];
+      if (!preset) return;
+      document.getElementById("name").value = preset.name;
+      document.getElementById("goal").value = preset.goal;
+      document.getElementById("audience").value = preset.audience;
+      document.getElementById("controlPreview").src = preset.controlSrc;
+      document.getElementById("controlName").textContent = preset.controlName;
+      defaultControlFile = demoFiles[mode]?.control || null;
+      selectedControlFile = null;
+      document.getElementById("control").value = "";
+      if (preset.challengerSrc) {
+        document.getElementById("challengerPreview").src = preset.challengerSrc;
+        document.getElementById("challengerName").textContent = preset.challengerName;
+      }
+      defaultChallengerFile = demoFiles[mode]?.challenger || null;
+      selectedChallengerFile = null;
+      document.getElementById("challenger").value = "";
     }
 
     function syncModeUi() {
@@ -895,6 +1030,11 @@ async def index() -> str:
       const hasMode = Boolean(mode);
       const generationMode = isVariantGenerationMode();
       document.getElementById("experimentForm").classList.toggle("is-visible", hasMode);
+      document.querySelectorAll("[data-mode]").forEach(button => {
+        const isActive = button.dataset.mode === mode;
+        button.classList.toggle("is-active", isActive);
+        button.setAttribute("aria-pressed", String(isActive));
+      });
       document.body.classList.toggle("variant-generation", generationMode);
       document.getElementById("uploadRow").classList.toggle("single", generationMode);
       document.getElementById("run").textContent = generationMode
@@ -904,11 +1044,13 @@ async def index() -> str:
         setStatus("Выберите режим эксперимента.");
         subtitleNode.textContent = "Выберите сценарий слева, чтобы открыть настройки запуска.";
       } else if (generationMode) {
+        applyModePreset(mode);
         setStatus("Режим генерации: загрузите контрольный макет. Цель и аудиторию можно оставить пустыми.");
         subtitleNode.textContent = "Команда LLM-агентов подготовит top-гипотезы, затем image-модель применит выбранное изменение к контролю.";
       } else {
-        setStatus("Загружен пример: кредитный калькулятор с разными значениями суммы и срока по умолчанию.");
-        subtitleNode.textContent = "После запуска здесь появятся голоса персон, причины выбора и рекомендации.";
+        applyModePreset(mode);
+        setStatus("Настройки A/B-тестирования готовы к запуску.");
+        subtitleNode.textContent = "Настройте эксперимент и запустите симуляцию.";
       }
     }
 
@@ -1134,6 +1276,7 @@ async def index() -> str:
       const confidence = Math.round((report.confidence_score || 0) * 100);
       const winnerLabel = labels[report.winner] || report.winner;
 
+      winnerNode.hidden = false;
       winnerNode.textContent = `Победитель: ${winnerLabel}`;
       subtitleNode.textContent = `${personaTotal} персон: результат считается только по стабильным`;
 
@@ -1246,6 +1389,7 @@ async def index() -> str:
       lastGenerationResult = result;
       const agentResponse = result.agent_response || {};
       const hypotheses = agentResponse.hypotheses || [];
+      winnerNode.hidden = false;
       winnerNode.textContent = "Выберите гипотезу";
       subtitleNode.textContent = "Агенты сформировали top-3 гипотезы. Выберите одну для генерации тестового макета.";
       const hypothesisCards = hypotheses.slice(0, 3).map((item, index) => `
@@ -1284,6 +1428,7 @@ async def index() -> str:
         return;
       }
       setStatus("Генерируем тестовый вариант по контрольному макету...");
+      winnerNode.hidden = false;
       winnerNode.textContent = "Генерируем вариант";
       subtitleNode.textContent = "Модель генерации изображений применяет только выбранную гипотезу.";
       try {
@@ -1304,6 +1449,7 @@ async def index() -> str:
 
     function renderVariantApproval(result) {
       const agentResponse = result.agent_response || {};
+      winnerNode.hidden = false;
       winnerNode.textContent = "Макет готов";
       subtitleNode.textContent = "Проверьте тестовый вариант и выберите дальнейшее действие.";
       reportNode.className = "report-body";
@@ -1323,6 +1469,7 @@ async def index() -> str:
 
     function rejectGeneratedVariant() {
       setStatus("Сгенерированный макет отклонен.");
+      winnerNode.hidden = false;
       winnerNode.textContent = "Макет отклонен";
       subtitleNode.textContent = "Можно выбрать другую гипотезу или изменить входные данные.";
       if (lastGenerationResult) {
@@ -1345,6 +1492,7 @@ async def index() -> str:
       updateProgressPercent(15);
       startLogPolling();
       setStatus("Отправляем сгенерированный вариант в synthetic A/B...");
+      winnerNode.hidden = false;
       winnerNode.textContent = "Synthetic A/B...";
       subtitleNode.textContent = "Запускаем стандартный блок оценки готового теста.";
       try {
@@ -1356,7 +1504,7 @@ async def index() -> str:
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({
             num_personas: totalPersonas,
-            batch_size: Number(document.getElementById("batch").value)
+            batch_size: 10
           })
         }).then(parseResponse);
         finishProgress();
@@ -1372,19 +1520,38 @@ async def index() -> str:
 
     setupPreview("control", "controlDrop", "controlPreview", "controlName");
     setupPreview("challenger", "challengerDrop", "challengerPreview", "challengerName");
+    const lightbox = document.getElementById("imageLightbox");
+    const lightboxImage = document.getElementById("lightboxImage");
+    document.querySelectorAll(".image-preview").forEach(button => {
+      button.addEventListener("click", () => {
+        const preview = document.getElementById(button.dataset.preview);
+        lightboxImage.src = preview.src;
+        lightboxImage.alt = preview.alt;
+        lightbox.showModal();
+      });
+    });
+    document.getElementById("closeLightbox").addEventListener("click", () => lightbox.close());
+    lightbox.addEventListener("click", event => {
+      if (event.target === lightbox) lightbox.close();
+    });
     document.getElementById("refreshLogs").addEventListener("click", refreshLogs);
-    document.querySelectorAll('input[name="experimentMode"]').forEach(input => {
-      input.addEventListener("change", syncModeUi);
+    document.querySelectorAll("[data-mode]").forEach(button => {
+      button.addEventListener("click", () => {
+        activeMode = button.dataset.mode;
+        syncModeUi();
+      });
     });
     syncModeUi();
 
     defaultFilesPromise = Promise.all([
       loadDefaultFile("/static/consumer_loan_300k_5y.png", "consumer_loan_300k_5y.png"),
-      loadDefaultFile("/static/consumer_loan_100k_3y.png", "consumer_loan_100k_3y.png")
+      loadDefaultFile("/static/consumer_loan_100k_3y.png", "consumer_loan_100k_3y.png"),
+      loadDefaultFile("/static/product_team_salary_car.png", "product_team_salary_car.png")
     ])
-      .then(([controlFile, challengerFile]) => {
-        defaultControlFile = controlFile;
-        defaultChallengerFile = challengerFile;
+      .then(([controlFile, challengerFile, productTeamControlFile]) => {
+        demoFiles.ab_test = {control: controlFile, challenger: challengerFile};
+        demoFiles.variant_generation = {control: productTeamControlFile, challenger: null};
+        if (currentMode()) applyModePreset(currentMode());
       })
       .catch(error => setStatus(error.message || String(error), true));
 
@@ -1405,6 +1572,7 @@ async def index() -> str:
       logsNode.textContent = "Лог пока пуст.";
       renderRunningProgress(totalPersonas, baselineMarker, mode);
       startLogPolling();
+      winnerNode.hidden = false;
       winnerNode.textContent = generationMode ? "LLM-агенты..." : "Расчет...";
       subtitleNode.textContent = generationMode
         ? "Запускаем агентный анализ и подготовку top-гипотез."
@@ -1456,7 +1624,7 @@ async def index() -> str:
             method: "POST",
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify({
-              batch_size: Number(document.getElementById("batch").value)
+              batch_size: 10
             })
           }).then(parseResponse);
           finishProgress();
@@ -1474,7 +1642,7 @@ async def index() -> str:
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({
             num_personas: totalPersonas,
-            batch_size: Number(document.getElementById("batch").value)
+            batch_size: 10
           })
         }).then(parseResponse);
         finishProgress();
@@ -1482,6 +1650,7 @@ async def index() -> str:
         setStatus("Отчет готов.");
       } catch (error) {
         failProgress();
+        winnerNode.hidden = false;
         winnerNode.textContent = "Ошибка";
         subtitleNode.textContent = "Проверьте параметры эксперимента и файлы.";
         reportNode.className = "empty";

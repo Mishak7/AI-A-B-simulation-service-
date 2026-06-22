@@ -104,8 +104,7 @@ class HTTPChatClient:
                     await self._record_success()
                     return str(message)
                 except (
-                    httpx.TimeoutException,
-                    httpx.NetworkError,
+                    httpx.TransportError,
                     httpx.HTTPStatusError,
                 ) as exc:
                     status = response.status_code if response is not None else None
