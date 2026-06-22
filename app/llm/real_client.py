@@ -9,6 +9,7 @@ from typing import Any
 from app.config import get_settings
 from app.llm.base import LLMClient
 from app.llm.http_chat_client import HTTPChatClient
+from app.llm.image_payload import prepare_chat_image
 from app.schemas.persona import PersonaProfile
 from app.schemas.simulation import SimulationVerdict, VisualAssessment
 
@@ -144,7 +145,8 @@ class RealLLMClient(LLMClient):
     def _image_content_part(image_path: str) -> dict[str, Any]:
         path = Path(image_path)
         mime_type = mimetypes.guess_type(path.name)[0] or "image/png"
-        encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+        image_bytes, mime_type = prepare_chat_image(path.read_bytes(), mime_type)
+        encoded = base64.b64encode(image_bytes).decode("ascii")
         return {
             "type": "image_url",
             "image_url": {

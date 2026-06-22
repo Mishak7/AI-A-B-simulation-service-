@@ -7,6 +7,43 @@ from app.schemas.simulation import SimulationVerdict, VisualAssessment
 
 
 class MockLLMClient(LLMClient):
+    cohorts = [
+        {
+            "cohort": "Целевой пользователь",
+            "cohort_motivation": "Быстро решить конкретную задачу",
+            "information_discovery_style": "Ищет нужную кнопку, форму, цену, вход или конкретную услугу",
+            "typical_behavior": "Быстро скроллит до целевого блока, кликает по очевидным CTA, мало изучает второстепенные разделы",
+            "funnel_exit_risk": "Нет понятного следующего шага, слишком много лишней информации, длинный путь до действия",
+        },
+        {
+            "cohort": "Сканирующий пользователь",
+            "cohort_motivation": "Быстро понять, подходит продукт или нет",
+            "information_discovery_style": "Читает заголовки, первые строки, визуальные акценты",
+            "typical_behavior": "Короткие резкие скроллы, быстрые переходы, мало времени на странице",
+            "funnel_exit_risk": "Слабый первый экран, длинные тексты, неясное ценностное предложение",
+        },
+        {
+            "cohort": "Исследователь",
+            "cohort_motivation": "Сравнить варианты и выбрать оптимальный",
+            "information_discovery_style": "Изучает карточки, тарифы, преимущества, FAQ, примеры",
+            "typical_behavior": "Много скроллит, возвращается назад, открывает несколько разделов, сравнивает условия",
+            "funnel_exit_risk": "Нет сравнения, фильтров, структуры, понятных различий между вариантами",
+        },
+        {
+            "cohort": "Осторожный пользователь",
+            "cohort_motivation": "Убедиться, что продукту можно доверять",
+            "information_discovery_style": "Ищет условия, ограничения, безопасность, отзывы, контакты, юридическую информацию",
+            "typical_behavior": "Часто открывает FAQ, футер, документы, условия, страницы поддержки",
+            "funnel_exit_risk": "Скрытые комиссии, неполные условия, нет контактов, нет сигналов доверия",
+        },
+        {
+            "cohort": "Неуверенный пользователь",
+            "cohort_motivation": "Выполнить действие без ошибки",
+            "information_discovery_style": "Внимательно читает подсказки, инструкции, пояснения к полям",
+            "typical_behavior": "Медленные действия, паузы перед кликом, возвраты назад, ошибки в формах",
+            "funnel_exit_risk": "Непонятные термины, агрессивная форма, плохая обработка ошибок, нет подсказок",
+        },
+    ]
     occupations = [
         "Product manager",
         "Small business owner",
@@ -38,6 +75,7 @@ class MockLLMClient(LLMClient):
             occupation = self.occupations[absolute_index % len(self.occupations)]
             location = self.locations[absolute_index % len(self.locations)]
             savviness = ["low", "medium", "high"][absolute_index % 3]
+            cohort = self.cohorts[absolute_index % len(self.cohorts)]
             personas.append(
                 PersonaProfile(
                     name=f"Synthetic Persona {absolute_index + 1}",
@@ -88,6 +126,7 @@ class MockLLMClient(LLMClient):
                     online_behavior="Compares options, scans headings, and looks for proof before acting.",
                     browsing_context="Short focused session on desktop or mobile during a busy day.",
                     task_context="Evaluating which interface better supports the stated conversion goal.",
+                    **cohort,
                 )
             )
         return personas

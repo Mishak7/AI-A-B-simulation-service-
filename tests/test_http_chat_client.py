@@ -1,12 +1,21 @@
 import asyncio
+import base64
+import io
 import json
+from pathlib import Path
 
 import httpx
 import pytest
+from PIL import Image
 
 import app.llm.http_chat_client as chat_module
 from app.config import Settings
-from app.llm.http_chat_client import ChatServiceUnavailableError, HTTPChatClient
+from app.llm.http_chat_client import (
+    ChatRequestError,
+    ChatServiceUnavailableError,
+    HTTPChatClient,
+)
+from app.llm.real_client import RealLLMClient
 
 
 def test_qwen_and_image_credentials_are_independent() -> None:
@@ -117,6 +126,46 @@ def test_http_chat_client_wraps_exhausted_429() -> None:
     with pytest.raises(ChatServiceUnavailableError, match="status=429"):
         asyncio.run(client.complete("test", temperature=0))
     asyncio.run(async_client.aclose())
+
+
+def test_http_chat_client_exposes_non_retryable_400() -> None:
+    async_client = httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(400, text="Bad Request")
+        )
+    )
+    client = HTTPChatClient(
+        api_key="secret",
+        base_url="https://example.test/v1",
+        model="vision-model",
+        timeout_seconds=60,
+        max_retries=0,
+        min_interval_seconds=0,
+        http_client=async_client,
+    )
+
+    with pytest.raises(ChatRequestError, match="HTTP 400") as error:
+        asyncio.run(client.complete("test", temperature=0))
+    asyncio.run(async_client.aclose())
+
+    assert error.value.status_code == 400
+
+
+def test_real_client_compacts_large_image_for_visual_calls(tmp_path: Path) -> None:
+    source = tmp_path / "large.png"
+    Image.new("RGBA", (3006, 1592), (20, 80, 140, 255)).save(source)
+    original = source.read_bytes()
+
+    content = RealLLMClient._image_content_part(str(source))
+    data_url = content["image_url"]["url"]
+    header, encoded = data_url.split(",", 1)
+    prepared = base64.b64decode(encoded)
+
+    assert header == "data:image/jpeg;base64"
+    assert len(prepared) <= 700_000
+    with Image.open(io.BytesIO(prepared)) as image:
+        assert max(image.size) <= 1600
+    assert source.read_bytes() == original
 
 
 def test_http_chat_client_retries_remote_protocol_disconnect(monkeypatch) -> None:

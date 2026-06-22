@@ -1,4 +1,21 @@
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict
+
+ALLOWED_COHORTS = (
+    "Целевой пользователь",
+    "Сканирующий пользователь",
+    "Исследователь",
+    "Осторожный пользователь",
+    "Неуверенный пользователь",
+)
+CohortName = Literal[
+    "Целевой пользователь",
+    "Сканирующий пользователь",
+    "Исследователь",
+    "Осторожный пользователь",
+    "Неуверенный пользователь",
+]
 
 
 class PersonaProfile(BaseModel):
@@ -25,6 +42,11 @@ class PersonaProfile(BaseModel):
     online_behavior: str
     browsing_context: str
     task_context: str
+    cohort: CohortName
+    cohort_motivation: str
+    information_discovery_style: str
+    typical_behavior: str
+    funnel_exit_risk: str
 
 
 class PersonaRead(PersonaProfile):

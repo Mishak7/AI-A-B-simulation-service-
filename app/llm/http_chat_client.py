@@ -14,6 +14,15 @@ class ChatServiceUnavailableError(RuntimeError):
     """The upstream chat service stayed unavailable after all retries."""
 
 
+class ChatRequestError(RuntimeError):
+    """The upstream chat service rejected a non-retryable request."""
+
+    def __init__(self, status_code: int, body: str) -> None:
+        self.status_code = status_code
+        self.body = body
+        super().__init__(f"Chat server returned HTTP {status_code}: {body}")
+
+
 class HTTPChatClient:
     """Minimal HTTP client for chat-completions-shaped model servers."""
 
@@ -94,9 +103,7 @@ class HTTPChatClient:
                         response.raise_for_status()
                     if response.is_error:
                         body = response.text[:500]
-                        raise RuntimeError(
-                            f"Chat server returned HTTP {response.status_code}: {body}"
-                        )
+                        raise ChatRequestError(response.status_code, body)
                     data = response.json()
                     message = data["choices"][0]["message"]["content"]
                     if not message:

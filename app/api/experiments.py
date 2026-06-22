@@ -13,7 +13,7 @@ from sqlalchemy.orm import selectinload
 from app.config import get_settings
 from app.db.session import get_session
 from app.llm.factory import get_llm_client
-from app.llm.http_chat_client import ChatServiceUnavailableError
+from app.llm.http_chat_client import ChatRequestError, ChatServiceUnavailableError
 from app.models import (
     Experiment,
     ExperimentMode,
@@ -191,6 +191,21 @@ async def run_experiment(
             status_code=503,
             detail="Qwen временно перегружен. Повторите запуск позже.",
         ) from exc
+    except ChatRequestError as exc:
+        logger.warning(
+            "Qwen rejected experiment request experiment_id=%s status=%s",
+            experiment_id,
+            exc.status_code,
+        )
+        experiment.status = ExperimentStatus.failed
+        await session.commit()
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "Сервис анализа изображения отклонил запрос. "
+                "Изображение было оптимизировано; повторите запуск позже."
+            ),
+        ) from exc
     except Exception:
         logger.exception("Run failed experiment_id=%s", experiment_id)
         experiment.status = ExperimentStatus.failed
@@ -247,6 +262,21 @@ async def run_variant_generation(
         raise HTTPException(
             status_code=503,
             detail="Qwen временно перегружен. Повторите запуск позже.",
+        ) from exc
+    except ChatRequestError as exc:
+        logger.warning(
+            "Qwen rejected variant generation request experiment_id=%s status=%s",
+            experiment_id,
+            exc.status_code,
+        )
+        experiment.status = ExperimentStatus.failed
+        await session.commit()
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "Сервис анализа изображения отклонил запрос. "
+                "Попробуйте другое изображение или повторите запуск позже."
+            ),
         ) from exc
     except Exception:
         logger.exception("Variant generation failed experiment_id=%s", experiment_id)

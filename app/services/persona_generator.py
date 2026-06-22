@@ -59,7 +59,13 @@ class PersonaGenerator:
                 persona = Persona(experiment_id=experiment.id, **profile.model_dump())
                 session.add(persona)
                 created.append(persona)
-                existing_personas.append({"name": profile.name, "occupation": profile.occupation})
+                existing_personas.append(
+                    {
+                        "name": profile.name,
+                        "occupation": profile.occupation,
+                        "cohort": profile.cohort,
+                    }
+                )
                 logger.info(
                     "Generated persona experiment_id=%s name=%r age=%s occupation=%r income=%r "
                     "location=%r financial_literacy=%r digital_literacy=%r trust_online=%r "
@@ -106,7 +112,11 @@ class PersonaGenerator:
                 "existing_personas": [
                     *context["existing_personas"],
                     *[
-                        {"name": profile.name, "occupation": profile.occupation}
+                        {
+                            "name": profile.name,
+                            "occupation": profile.occupation,
+                            "cohort": profile.cohort,
+                        }
                         for profile in profiles
                     ],
                 ],

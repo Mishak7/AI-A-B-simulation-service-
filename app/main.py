@@ -90,6 +90,11 @@ async def _run_sqlite_migrations(connection) -> None:
             "decision_style": "VARCHAR(255) NOT NULL DEFAULT ''",
             "region_type": "VARCHAR(128) NOT NULL DEFAULT ''",
             "income_stability": "VARCHAR(128) NOT NULL DEFAULT ''",
+            "cohort": "VARCHAR(64) NOT NULL DEFAULT 'Целевой пользователь'",
+            "cohort_motivation": "TEXT NOT NULL DEFAULT 'Быстро решить конкретную задачу'",
+            "information_discovery_style": "TEXT NOT NULL DEFAULT 'Ищет нужную кнопку, форму, цену, вход или конкретную услугу'",
+            "typical_behavior": "TEXT NOT NULL DEFAULT 'Быстро скроллит до целевого блока, кликает по очевидным CTA, мало изучает второстепенные разделы'",
+            "funnel_exit_risk": "TEXT NOT NULL DEFAULT 'Нет понятного следующего шага, слишком много лишней информации, длинный путь до действия'",
         }
         for column_name, column_type in persona_additions.items():
             if column_name not in persona_columns:

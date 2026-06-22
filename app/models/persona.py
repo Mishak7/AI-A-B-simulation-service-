@@ -32,6 +32,11 @@ class Persona(Base):
     online_behavior: Mapped[str] = mapped_column(Text)
     browsing_context: Mapped[str] = mapped_column(Text)
     task_context: Mapped[str] = mapped_column(Text)
+    cohort: Mapped[str] = mapped_column(String(64))
+    cohort_motivation: Mapped[str] = mapped_column(Text)
+    information_discovery_style: Mapped[str] = mapped_column(Text)
+    typical_behavior: Mapped[str] = mapped_column(Text)
+    funnel_exit_risk: Mapped[str] = mapped_column(Text)
 
     experiment = relationship("Experiment", back_populates="personas")
     simulation_results = relationship(

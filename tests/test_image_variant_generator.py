@@ -1,10 +1,12 @@
 import asyncio
 import base64
+import io
 import re
 from pathlib import Path
 
 import httpx
 import pytest
+from PIL import Image
 
 from app.config import Settings, get_settings
 from app.models import Experiment
@@ -184,6 +186,32 @@ def test_image_prompt_has_preservation_rules_and_no_raw_hypothesis_json() -> Non
     for instruction in ("Make exactly this change", "Keep everything else unchanged"):
         assert instruction in prompt
     assert len(prompt) < 500
+
+
+def test_large_control_image_is_compacted_for_chat_without_changing_source(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "large.png"
+    Image.new("RGBA", (3006, 1592), (20, 80, 140, 255)).save(source)
+    original = source.read_bytes()
+    experiment = Experiment(
+        id=56,
+        name="Large screenshot",
+        conversion_goal="Generate hypotheses",
+        target_audience="",
+        control_image_path=str(source),
+    )
+
+    payload = LLMVariantGenerator._build_payload(
+        experiment, batch_size=10, mode="variant_generation"
+    )
+    chat_image = base64.b64decode(payload["control_image"]["data_base64"])
+
+    assert payload["control_image"]["mime_type"] == "image/jpeg"
+    assert len(chat_image) <= 700_000
+    with Image.open(io.BytesIO(chat_image)) as prepared:
+        assert max(prepared.size) <= 1600
+    assert source.read_bytes() == original
 
 
 @pytest.mark.parametrize(

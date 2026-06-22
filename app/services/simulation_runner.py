@@ -96,6 +96,11 @@ class SimulationRunner:
                     "online_behavior": persona.online_behavior,
                     "browsing_context": persona.browsing_context,
                     "task_context": persona.task_context,
+                    "cohort": persona.cohort,
+                    "cohort_motivation": persona.cohort_motivation,
+                    "information_discovery_style": persona.information_discovery_style,
+                    "typical_behavior": persona.typical_behavior,
+                    "funnel_exit_risk": persona.funnel_exit_risk,
                 }
                 context = {
                     "persona_profile": persona_profile,

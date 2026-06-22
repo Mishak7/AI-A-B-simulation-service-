@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from app.config import get_settings
+from app.llm.image_payload import prepare_chat_image
 from app.llm.http_chat_client import HTTPChatClient
 from app.models import Experiment
 from app.services.image_edit_client import ImageEditClient
@@ -271,7 +272,14 @@ class LLMVariantGenerator:
         if not experiment.control_image_path:
             raise ValueError("Control image is required for variant generation")
         image_path = Path(experiment.control_image_path)
-        image_bytes = image_path.read_bytes()
+        source_bytes = image_path.read_bytes()
+        mime_type = mimetypes.guess_type(image_path.name)[0] or "image/png"
+        image_bytes = source_bytes
+        if mode == "variant_generation":
+            image_bytes, mime_type = prepare_chat_image(
+                source_bytes,
+                mime_type,
+            )
         return {
             "experiment_id": experiment.id,
             "name": experiment.name,
@@ -280,12 +288,29 @@ class LLMVariantGenerator:
             "batch_size": batch_size,
             "control_image": {
                 "filename": image_path.name,
-                "mime_type": mimetypes.guess_type(image_path.name)[0] or "image/png",
+                "mime_type": mime_type,
                 "source_path": experiment.control_image_path,
                 "data_base64": base64.b64encode(image_bytes).decode("ascii"),
+                "source_bytes": len(source_bytes),
+                "chat_bytes": len(image_bytes),
             },
             "metadata": {"mode": mode, "created_at": datetime.now(UTC).isoformat()},
         }
+
+    @staticmethod
+    def _prepare_chat_image(
+        image_bytes: bytes,
+        mime_type: str,
+        *,
+        max_dimension: int = 1600,
+        max_bytes: int = 700_000,
+    ) -> tuple[bytes, str]:
+        return prepare_chat_image(
+            image_bytes,
+            mime_type,
+            max_dimension=max_dimension,
+            max_bytes=max_bytes,
+        )
 
     @classmethod
     def _build_pipeline_response(
